@@ -256,21 +256,21 @@ public:
      */
     double enthalpy_mole() const override;
 
-    double cp_mole() const override {
-        throw NotImplementedError("PlasmaPhase::cp_mole");
-    }
+    // double cp_mole() const override {
+    //     throw NotImplementedError("PlasmaPhase::cp_mole");
+    // }
 
-    double entropy_mole() const override {
-        throw NotImplementedError("PlasmaPhase::entropy_mole");
-    }
+    // double entropy_mole() const override {
+    //     throw NotImplementedError("PlasmaPhase::entropy_mole");
+    // }
 
-    double gibbs_mole() const override {
-        throw NotImplementedError("PlasmaPhase::gibbs_mole");
-    }
+    // double gibbs_mole() const override {
+    //     throw NotImplementedError("PlasmaPhase::gibbs_mole");
+    // }
 
-    double intEnergy_mole() const override {
-        throw NotImplementedError("PlasmaPhase::intEnergy_mole");
-    }
+    // double intEnergy_mole() const override {
+    //     throw NotImplementedError("PlasmaPhase::intEnergy_mole");
+    // }
 
     void getEntropy_R(double* sr) const override;
 
@@ -560,7 +560,7 @@ protected:
     mutable double m_electronMobility;
 
     //! number of species with vibrational excitation
-    size_t m_nspevib;
+    size_t m_nspevib = 0; // initialised to 0, it will be set in inithermo later.
     size_t m_nrevib;
 
     //! species energy delta going into vibrationnal energy
@@ -571,6 +571,11 @@ protected:
 
     //! species vibrational energies
     vector<double> m_evib;
+
+    // Type of EEDF discrtisation chosen by the user
+
+    string m_discret_type = "Linear";
+    double kTe_max = 100; // Initialisation of the maximum energy in eV of the electron distribution
 
 private:
 

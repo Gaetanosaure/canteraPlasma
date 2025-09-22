@@ -104,6 +104,7 @@ double ReactorNet::distance() {
 
 void ReactorNet::initialize()
 {
+    printf("Entering ReactorNet::initialize\n");
     m_nv = 0;
     debuglog("Initializing reactor network.\n", m_verbose);
     if (m_reactors.empty()) {
@@ -155,10 +156,12 @@ void ReactorNet::initialize()
     }
     m_integrator_init = true;
     m_init = true;
+    printf("Exiting ReactorNet::initialize\n");
 }
 
 void ReactorNet::reinitialize()
 {
+    printf("Entering ReactorNet::reinitialize\n");
     if (m_init) {
         debuglog("Re-initializing reactor network.\n", m_verbose);
         m_integ->reinitialize(m_time, *this);
@@ -169,6 +172,7 @@ void ReactorNet::reinitialize()
     } else {
         initialize();
     }
+    printf("Exiting ReactorNet::reinitialize\n");
 }
 
 void ReactorNet::setLinearSolverType(const string& linSolverType)
@@ -195,6 +199,7 @@ int ReactorNet::maxSteps()
 
 void ReactorNet::advance(double time)
 {
+    
     if (!m_init) {
         initialize();
     } else if (!m_integrator_init) {
@@ -207,17 +212,13 @@ void ReactorNet::advance(double time)
 
 double ReactorNet::advance(double time, bool applylimit)
 {
-    printf("before boucle initialize");
     if (!m_init) {
-        printf("before initialize");
         initialize();
-        printf("after initialize");
     } else if (!m_integrator_init) {
-        printf("before re-initialize");
         reinitialize();
-        printf("after re-initialize");
+        
     }
-    printf("after boucle initialize");
+    
 
     if (!applylimit) {
         // take full step

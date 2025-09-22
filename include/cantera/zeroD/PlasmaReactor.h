@@ -22,6 +22,7 @@ class PlasmaReactor : public IdealGasReactor
 {
 public:
     using IdealGasReactor::IdealGasReactor; // inherit constructors
+    using IdealGasReactor::setThermo;
 
     string type() const override {
         return "PlasmaReactor";
@@ -62,9 +63,6 @@ public:
 
 
 
-
-
-
 protected:
     void setThermo(ThermoPhase& thermo) override;
 
@@ -76,11 +74,11 @@ protected:
 
     std::vector<double> RvtVPower; // Vibrational energy relaxation into heat
 
-    size_t m_nspevib; //!< Number of species with vibrational excitation
+    size_t m_nspevib = 0; //!< Number of species with vibrational excitation
 
     std::vector<std::string> vib_spec; // a vector to store the names of vibrational species
 
-    PlasmaPhase* m_plasma = nullptr; // pointer to the plasma phase
+    PlasmaPhase* m_plasma = nullptr; // pointer to the plasma phase initialisation
 
 
     Kinetics* m_kinetics;

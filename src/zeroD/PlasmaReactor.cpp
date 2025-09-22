@@ -26,60 +26,136 @@ namespace Cantera
 
 void PlasmaReactor::setThermo(ThermoPhase& thermo)
 {
-    writelog("entering set thermofunction");
-    if (thermo.type() != "plasma") {
-        throw CanteraError("PlasmaReactor::setThermo",
-                           "Incompatible phase type provided");
+    writelog("PlasmaReactor::setThermo(ThermoPhase&)\n");
+
+    // Cast first so the error is precise
+    auto* p = dynamic_cast<PlasmaPhase*>(&thermo);
+    if (!p) {
+        throw CanteraError("PlasmaReactor::setThermo(ThermoPhase&)",
+                           "Thermo is not a PlasmaPhase; got '{}'.", thermo.type());
     }
-    Reactor::setThermo(thermo);
-    m_plasma = &dynamic_cast<PlasmaPhase&>(thermo);
-    compute_disVPower();
+
+    // Call the immediate base to keep hierarchy consistent
+    IdealGasReactor::setThermo(thermo);
+
+    m_plasma = p;
+
 }
+// old version before me trying to reinforce getState function. Keep it for now bc I am not sure the new version is that much better, but it is for sure more complex.
+// void PlasmaReactor::getState(double* y)
+// {
+//     writelog("\nEntering getState function \n");
+//     if (m_plasma == 0) {
+//         throw CanteraError("IdealGasReactor::getState",
+//                            "Error: reactor is empty.");
+//     }
+//     m_plasma->restoreState(m_state);
+//     printf("\nHEY1\n");
+//     // set the first component to the total mass
+//     m_mass = m_plasma->density() * m_vol;
+//     y[0] = m_mass;
+//     printf("\nHEY2\n");
+//     // set the second component to the total volume
+//     y[1] = m_vol;
+
+//     // Set the third component to the temperature
+//     y[2] = m_plasma->temperature();
+//     printf("\nHEY3\n");
+
+//     // set components y+3 ... y+K+2 to the vibrational energy of each species
+//     m_plasma->getVibrationalEnergies(y+3);
+//     printf("\nHEY4\n");
+
+//     // set components y+3+m_nspevib ... y+K+2+m_nspevib to the mass fractions of each species
+//     m_plasma->getMassFractions(y+3+m_nspevib);
+//     printf("\nHEY5\n");
+
+
+//     // set the remaining components to the surface species
+//     // coverages on the walls
+//     getSurfaceInitialConditions(y + m_nsp + 3 + m_nspevib);
+
+//     printf("\nExiting getState function\n");
+// }
 
 void PlasmaReactor::getState(double* y)
 {
-    writelog("entering getState");
-    if (m_plasma == 0) {
-        throw CanteraError("IdealGasReactor::getState",
-                           "Error: reactor is empty.");
+    //writelog("\nEntering getState function \n");
+    if (!m_plasma) {
+        throw CanteraError("PlasmaReactor::getState", "Error: reactor is empty.");
     }
+
+    std::fill(y, y + m_nv, 0.0);    // safety
+
     m_plasma->restoreState(m_state);
 
-    // set the first component to the total mass
+    // base 3
     m_mass = m_plasma->density() * m_vol;
     y[0] = m_mass;
-
-    // set the second component to the total volume
     y[1] = m_vol;
-
-    // Set the third component to the temperature
     y[2] = m_plasma->temperature();
 
-    // set components y+3 ... y+K+2 to the vibrational energy of each species
-    m_plasma->getVibrationalEnergies(y+3);
+    // vib block
+    if (m_nspevib > 0) {
+        m_plasma->getVibrationalEnergies(y + 3);
+    }
 
-    // set components y+3+m_nspevib ... y+K+2+m_nspevib to the mass fractions of each species
-    m_plasma->getMassFractions(y+3+m_nspevib);
+    // species block
+    m_plasma->getMassFractions(y + 3 + m_nspevib);
 
-    // set the remaining components to the surface species
-    // coverages on the walls
-    getSurfaceInitialConditions(y + m_nsp + 3 + m_nspevib);
+    // surfaces block. It is put here but normally we should not go through it as we have no surface reactions. 
+    const size_t nsurf = (m_nv > (3 + m_nspevib + m_nsp))
+        ? (m_nv - (3 + m_nspevib + m_nsp)) : 0;
+    if (nsurf > 0) {
+        getSurfaceInitialConditions(y + 3 + m_nspevib + m_nsp);
+    }
+
+    //printf("\nExiting getState function\n");
 }
 
 void PlasmaReactor::initialize(double t0) {
-    writelog("Entering initialize function");
-    if (m_plasma == 0) {
-        throw CanteraError("PlasmaReactor::initialize",
-                            "Error: m_plasma pointer is not initialised. This PlasmaReactor has no PlasmaPhase...");
+    writelog("PlasmaReactor::initialize\n");
+
+    // If our override wasn’t reached during construction, recover here.
+    if (!m_plasma) {
+        if (!m_thermo) {
+            throw CanteraError("PlasmaReactor::initialize",
+                "No thermo attached to this reactor.");
+        }
+        if (auto* p = dynamic_cast<PlasmaPhase*>(m_thermo)) {
+            m_plasma = p;
+        } else {
+            throw CanteraError("PlasmaReactor::initialize",
+                "Attached thermo is not PlasmaPhase; got '{}'.", m_thermo->type());
+        }
+
     }
+
     IdealGasReactor::initialize(t0);
 
     // Equations for vibrational energy density are initialised here.
     m_nspevib = m_plasma->nsp_evib();
-    m_nv += m_nspevib;
+    printf("\n Number of species with vibrational excitation seen in PlasmaReactor::initialize: %d \n", int(m_nspevib));
+    
+    m_nv += m_nspevib; // update the count of m_nv to send the right number of equations to ReactorNet::initialize.
+    const auto expected = 3 + m_nspevib + m_nsp; // + nsurf if you have them
+    if (expected > m_nv) {
+        throw CanteraError("PlasmaReactor::initialize",
+            "State layout exceeds m_nv: expected {} > m_nv {}", expected, m_nv);
+    }
+    
     disVibVPower.resize(m_nspevib);
+    
     RvtVPower.resize(m_nspevib);
+    
     recoverVibSpecies(); // get all the vibrationnal species declared in the plasma phase
+    
+    compute_disVPower();
+
+    writelogf("PlasmaReactor::initialize done: m_nspevib=%zu, m_nsp=%zu, m_nv=%zu, expected=%zu\n",
+        m_nspevib, m_nsp, m_nv, size_t(3 + m_nspevib + m_nsp));
+
+    printf("\n Exiting initialise \n");
 }
 
 void PlasmaReactor::updateState(double* y)
@@ -88,19 +164,38 @@ void PlasmaReactor::updateState(double* y)
     // [2] the temperature, [3...K+3] are the species vibrational energies,
     // [3+m_nspevib...K+3+m_nspevib] are the mass fractions of each species,
     // and [K+3+m_nspevib...] are the coverages of surface species on each wall.
-    printf("entering update_state function");
+    //printf("entering update_state function");
     m_mass = y[0];
     m_vol = y[1];
     m_plasma->setVibrationalEnergies(y+3);
     m_plasma->setMassFractions_NoNorm(y+3+m_nspevib);
     m_plasma->setState_TD(y[2], m_mass / m_vol);
     updateConnected(true);
-    updateSurfaceState(y + m_nsp + 3 + m_nspevib);
+    const size_t nsurf = (m_nv > (3 + m_nspevib + m_nsp))
+    ? (m_nv - (3 + m_nspevib + m_nsp)) : 0;
+    if (nsurf > 0) {
+        updateSurfaceState(y + 3 + m_nspevib + m_nsp);
+    }
+
 }
 
 void PlasmaReactor::eval(double time, double* LHS, double* RHS)
 {
-    printf(" **************************** Entering eval function ******************************************\n");
+    //printf(" **************************** Entering eval function ******************************************\n");
+
+    ////////////////////////////////////////// chatgpt safety addition proposal to reinforce the function //////////////////// comment: why not but doesn't seem to change anything
+
+    std::fill(LHS, LHS + m_nv, 0.0);
+    std::fill(RHS, RHS + m_nv, 0.0);
+
+    // Mass and volume are ODEs
+    LHS[0] = 1.0;                   // dm/dt
+    LHS[1] = 1.0;                   // dV/dt
+    RHS[1] = m_vdot;
+
+    //////////////////////////////////////////////////////////////
+
+
     double& dmdt = RHS[0]; // dm/dt (gas phase)
     double& mcvdTdt = RHS[2]; // m * c_v * dT/dt
     double* devibdt = RHS + 3; // devib/dt
@@ -235,7 +330,7 @@ string PlasmaReactor::componentName(size_t k) {
 }
 
 void PlasmaReactor::compute_disVPower() {
-    printf("Computing discharge power");
+    //printf("Computing discharge power");
     if (m_plasma->electricField() < 1e-21){
         // If the electric field is too low, we assume no discharge power.
         m_disVPower = 0;
@@ -249,7 +344,7 @@ void PlasmaReactor::compute_disVPower() {
 
 // TO BE IMPLEMENTED WITH REAL VALUES LATER, FOR NOW RUNS JUST TO SHOW THE CODE STRCUTURE BUL ALL EVIB IS SET TO 0
 void PlasmaReactor::compute_disVibVPower() { 
-    printf("Computing vibrational power");
+    //printf("Computing vibrational power");
 
     size_t n_vib_species = m_nspevib;
     
@@ -260,7 +355,7 @@ void PlasmaReactor::compute_disVibVPower() {
 
 // TO BE IMPLEMENTED WITH REAL VALUES LATER, FOR NOW RUNS JUST TO SHOW THE CODE STRCUTURE BUL ALL EVIB IS SET TO 0
 void PlasmaReactor::compute_RvtVPower() {
-    printf("Computing vibrational relaxation power");
+    //printf("Computing vibrational relaxation power");
     size_t n_vib_species = m_nspevib;
     
     for (size_t n=0; n<n_vib_species; n++){

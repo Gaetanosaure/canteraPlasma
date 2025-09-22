@@ -67,6 +67,8 @@ public:
 
     void setLinearGrid(double& kTe_max, size_t& ncell);
 
+    void setQuadraticGrid(double& kTe_max, size_t& ncell);
+
     void setGridCache();
 
     /**

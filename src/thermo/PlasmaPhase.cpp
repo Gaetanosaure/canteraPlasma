@@ -62,7 +62,10 @@ void PlasmaPhase::updateElectronEnergyDistribution()
     } else if (m_distributionType == "Boltzmann-two-term") {
         auto ierr = m_eedfSolver->calculateDistributionFunction();
         if (ierr == 0) {
+            auto x = m_eedfSolver->getGridEdge();
             auto y = m_eedfSolver->getEEDFEdge();
+            m_nPoints = x.size();
+            m_electronEnergyLevels = Eigen::Map<const Eigen::ArrayXd>(x.data(), m_nPoints);
             m_electronEnergyDist = Eigen::Map<const Eigen::ArrayXd>(y.data(), m_nPoints);
         } else {
             throw CanteraError("PlasmaPhase::updateElectronEnergyDistribution",
@@ -301,6 +304,52 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
             auto distribution = eedf["distribution"].asVector<double>(levels.size());
             setDiscretizedElectronEnergyDist(levels.data(), distribution.data(),
                                              levels.size());
+        } else if (m_distributionType == "Boltzmann-two-term") {
+
+            // POSSIBILITY TO LOAD THE CROSS-SECTIONS FROM THE INPUT FILE - SEE IF IT IS THE ONE I CHOOSE.
+            // if (rootNode.hasKey("cross-sections")) {
+            //     // CQM debug
+            //     writelog("I have cross-sections!\n");
+            //     // By default, add all CS from the 'cross-sections' section
+            //     for (const auto& item : rootNode["cross-sections"].asVector<AnyMap>()) {
+            //         addElectronCrossSection( newElectronCrossSection(item) );
+            //     }
+            //     writelog("m_ncs = {:3d}\n", m_ncs);
+            // } else {
+            //     throw CanteraError("PlasmaPhase::setParameters",
+            //         "Cross section data are required.");
+            // }
+            if (eedf.hasKey("energy-levels-parameters")){
+                std::vector<double> nrj_levels_params = eedf["energy-levels-parameters"].asVector<double>();
+                if (nrj_levels_params.size() != 2) {
+                    throw CanteraError("PlasmaPhase::setParameters","energy-levels-parameters should contain two values: kTe_max and nGridCells.");
+                }
+                kTe_max = nrj_levels_params[0];
+                size_t nGridCells = static_cast<size_t>(nrj_levels_params[1]);
+                m_eedfSolver = make_unique<EEDFTwoTermApproximation>(*this);
+            
+                // CQM WARNING m_nPoints is nEdges in PlasmaPhase (i.e. nCells+1)
+                // It would be nice to change nPoints to nGridEdges
+                m_nPoints = nGridCells + 1;
+
+                if (eedf.hasKey("levels_distribution")){
+                    auto levels_distribution = eedf["levels_distribution"].asString();
+                    if (levels_distribution == "Linear"){
+                        m_discret_type = "Linear";
+                        m_eedfSolver->setLinearGrid(kTe_max, nGridCells);
+                    } else if (levels_distribution == "Quadratic"){
+                        m_discret_type = "Quadratic";
+                        m_eedfSolver->setQuadraticGrid(kTe_max, nGridCells);
+                    }
+                    else {
+                        throw CanteraError("PlasmaPhase::setParameters","levels_distribution should be Linear, Quadratic or Geometric. For now, no other point distribution options are implemented.\nIf you want another distribution please implement it.");
+                    }
+                } else {
+                    // Default to linear grid if no distribution is specified
+                    m_eedfSolver->setLinearGrid(kTe_max, nGridCells);
+                    writelog("No levels_distribution key found in the input file. Defaulting to linear grid.\n");
+                }
+            }
         }
     }
 
@@ -356,6 +405,10 @@ void PlasmaPhase::initThermo()
         throw CanteraError("PlasmaPhase::initThermo",
                            "No electron species found.");
     }
+    printf("checking mnspevib value before counting: %d", m_nspevib);
+    countVibSpecies();
+    printf("checking mnspevib value after counting: %d", m_nspevib);
+    setMsp_evib(m_nspevib);
 }
 
 void PlasmaPhase::setSolution(std::weak_ptr<Solution> soln) {
@@ -691,7 +744,7 @@ void PlasmaPhase::compute_nDensity() const {
 }
 
 void PlasmaPhase::compute_electronMobility() const {
-    if (m_distributionType == "TwoTermApproximation") {
+    if (m_distributionType == "Boltzmann-two-term") {
         m_electronMobility = m_eedfSolver->getElectronMobility();
     } else {
         throw NotImplementedError("PlasmaPhase::compute_electronMobility");
@@ -716,6 +769,16 @@ void PlasmaPhase::getVibrationalEnergies(double* const evib) const{
 }
 
 void PlasmaPhase::setVibrationalEnergies(const double* const evib){
+    if (m_evib.size() != m_nspevib) {
+    throw CanteraError("PlasmaPhase::setVibrationalEnergies",
+        fmt::format("Size mismatch: m_evib.size()={}, m_nspevib={}",
+                    m_evib.size(), m_nspevib));
+    }
+    if (evib == nullptr) {
+        throw CanteraError("PlasmaPhase::setVibrationalEnergies",
+            "Null pointer passed to evib.");
+    }
+
     copy(evib, evib + m_nspevib, m_evib.begin());
 }
 

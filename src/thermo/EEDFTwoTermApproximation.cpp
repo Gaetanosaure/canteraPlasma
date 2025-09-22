@@ -43,6 +43,24 @@ void EEDFTwoTermApproximation::setLinearGrid(double& kTe_max, size_t& ncell)
     setGridCache();
 }
 
+void EEDFTwoTermApproximation::setQuadraticGrid(double& kTe_max, size_t& ncell)
+{
+    // writelog("Grid info : Quadratic grid is used \n");
+    // writelog("Grid info : Maximum energy of the grid is {:15.3g} [eV]\n", kTe_max);
+    options.m_points = ncell;
+    m_gridCenter.resize(options.m_points);
+    m_gridEdge.resize(options.m_points + 1);
+    m_f0.resize(options.m_points);
+    m_f0_edge.resize(options.m_points + 1);
+    double delta = 2*kTe_max/(ncell*(ncell+1));
+    for (size_t j = 0; j < options.m_points; j++) {
+        m_gridCenter[j] = 0.5*delta*(j+0.5)*(j+1+0.5);
+        m_gridEdge[j] = 0.5*delta*j*(j+1);
+    }
+    m_gridEdge[options.m_points] = kTe_max;
+    setGridCache();
+}
+
 int EEDFTwoTermApproximation::calculateDistributionFunction()
 {
     if (m_first_call) {
@@ -118,7 +136,7 @@ void EEDFTwoTermApproximation::converge(Eigen::VectorXd& f0)
         if (err1 < options.m_rtol) {
             break;
         } else if (n == options.m_maxn - 1) {
-            throw CanteraError("WeaklyIonizedGas::converge", "Convergence failed");
+            throw CanteraError("EEDFTwoTermApproximation::converge", "Convergence failed");
         }
     }
 }
