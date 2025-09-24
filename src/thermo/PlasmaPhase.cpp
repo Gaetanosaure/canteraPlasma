@@ -342,7 +342,7 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
                         m_eedfSolver->setQuadraticGrid(kTe_max, nGridCells);
                     }
                     else {
-                        throw CanteraError("PlasmaPhase::setParameters","levels_distribution should be Linear, Quadratic or Geometric. For now, no other point distribution options are implemented.\nIf you want another distribution please implement it.");
+                        throw CanteraError("PlasmaPhase::setParameters","levels_distribution should be Linear or Quadratic for the Boltzmann-two-term option.");
                     }
                 } else {
                     // Default to linear grid if no distribution is specified

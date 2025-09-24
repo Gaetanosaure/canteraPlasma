@@ -61,7 +61,6 @@ void ElectronCollisionPlasmaRate::setParameters(const AnyMap& node, const UnitSt
     if (node.hasKey("product")) {
         m_product = node["product"].asString();
     }
-
     m_energyLevels = node["energy-levels"].asVector<double>();
     m_crossSections = node["cross-sections"].asVector<double>(m_energyLevels.size());
     m_threshold = node.getDouble("threshold", 0.0);

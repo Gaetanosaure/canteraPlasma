@@ -423,6 +423,11 @@ public:
 
     std::vector<std::string> vib_species; // a vector to store the names of vibrational species
 
+        // Type of EEDF discrtisation chosen by the user
+
+    string m_discret_type = "Linear";
+    double kTe_max = 100; // Initialisation of the maximum energy in eV of the electron distribution
+
 
 protected:
     void updateThermo() const override;
@@ -520,6 +525,7 @@ protected:
     //! Electron energy levels corresponding to the cross section data. m_energyLevels[i][j],
     //! where i is the specific process, j is the index of vector. Unit: [eV]
     vector<vector<double>> m_energyLevels;
+    
 
     //! ionization degree for the electron-electron collisions (tmp is the previous one)
     double m_ionDegree = 0.0;
@@ -572,10 +578,6 @@ protected:
     //! species vibrational energies
     vector<double> m_evib;
 
-    // Type of EEDF discrtisation chosen by the user
-
-    string m_discret_type = "Linear";
-    double kTe_max = 100; // Initialisation of the maximum energy in eV of the electron distribution
 
 private:
 
