@@ -436,10 +436,37 @@ double PlasmaReactor::tau_millikan_white(string spec_name){
 }
 
 double PlasmaReactor::tau_castela(string spec_name){
-    throw CanteraError("PlasmaReactor::compute_TauRelax",
-                           "Error: Castela relaxation implementation is currently incomplete");
-}
+    double tau = 1e-11; // Almost as fast gas heating if castela is called for a species which is not N2. In that case, the species will have a very short relaxation time.
+    if (spec_name == "N2") {
+        double a_n2 = 221.0;
+        double b_n2 = 0.029;
+        double a_o2 = 229.0;
+        double b_o2 = 0.0295;
+        double a_o = 72.4; 
+        double b_o = 0.015;
+        
+        double c = 101325; //Pa.s
 
+        double T = m_plasma->temperature();
+        double P = m_plasma->pressure();
+        double x_n2 = m_plasma->moleFraction("N2");
+        double x_o2 = m_plasma->moleFraction("O2");
+        double x_o = m_plasma->moleFraction("O");
+
+        double p_n2 = Max(P * x_n2, 1e-16); // avoid division by zero
+        double p_o2 = Max(P * x_o2, 1e-16);
+        double p_o = Max(P * x_o, 1e-16);
+
+        double tau_n2 = (exp(a_n2*(pow(T, -0.3333) - b_n2) - 18.42))*c/p_n2;
+        double tau_o2 = (exp(a_o2*(pow(T, -0.3333) - b_o2) - 18.42))*c/p_o2;
+        double tau_o = (exp(a_o*(pow(T, -0.3333) - b_o) - 18.42))*c/p_o;
+
+        tau = 1/(1/tau_n2 + 1/tau_o2 + 1/tau_o);
+        
+    }
+    printf("tau_castela for species %s = %e\n", spec_name.c_str(), tau);
+    return tau;
+}
 double PlasmaReactor::tau_starikovskiy(size_t n){
     throw CanteraError("PlasmaReactor::compute_TauRelax",
                            "Error: Starikovskiy relaxation implementation is currently incomplete");
