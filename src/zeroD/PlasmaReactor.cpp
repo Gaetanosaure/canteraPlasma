@@ -409,22 +409,22 @@ double PlasmaReactor::compute_TauRelax(size_t n){
     double tau = 0;
     string spec_name = vib_spec[n];
     // printf("Computing relaxation time for species %s\n", spec_name.c_str());
-    if (relax_type == "Millikan&White"){
+    if (relax_type == "Millikan&White" || relax_type == "millikan&White" || relax_type == "Millikan&white" || relax_type == "millikan&white"){
         tau = tau_millikan_white(spec_name);
     }
-    else if (relax_type == "Castela"){
+    else if (relax_type == "Castela" || relax_type == "castela" ){
         tau = tau_castela(spec_name);
     }
-    else if (relax_type == "Constant"){
+    else if (relax_type == "Constant" || relax_type == "constant"){
         tau = tau_relax_constant_model;
     }
-    else if (relax_type == "Starikovskiy"){
+    else if (relax_type == "Starikovskiy" || relax_type == "starikovskiy"){
         tau = tau_starikovskiy(n);
     }
     
     else{
         throw CanteraError("PlasmaReactor::compute_TauRelax",
-                           "Error: species vibrational relaxation type not implemented. Please correct the YAML file or implement this species correlation.");
+                           "Error: species vibrational relaxation type not implemented. Only Castela, Constant, Millikan&White and Starikovskiy models are implemented");
     }
     
     return tau;
@@ -432,7 +432,7 @@ double PlasmaReactor::compute_TauRelax(size_t n){
 
 double PlasmaReactor::tau_millikan_white(string spec_name){
     throw CanteraError("PlasmaReactor::compute_TauRelax",
-                           "Error: Millikan&White relaxation implementation is currently incomplete");
+                           "Error: Millikan&White relaxation's implementation is currently incomplete");
 }
 
 double PlasmaReactor::tau_castela(string spec_name){
