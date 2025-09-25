@@ -345,21 +345,49 @@ void PlasmaReactor::compute_disVPower() {
 // TO BE IMPLEMENTED WITH REAL VALUES LATER, FOR NOW RUNS JUST TO SHOW THE CODE STRCUTURE BUL ALL EVIB IS SET TO 0
 void PlasmaReactor::compute_disVibVPower() { 
     //printf("Computing vibrational power");
-
     size_t n_vib_species = m_nspevib;
+
+    m_kin->getNetRatesOfProgress(&m_kr[0]); // "kr"
     
     for (size_t k = 0; k<n_vib_species; k++){
+
         disVibVPower[k] = 0;
+        string vib_spec_here = vib_spec[k];
+        
+        //// DO NOT UNCOMMENT FOR NOW. THE ARCHITECTURE IS READY BUT IS WILL PRODUCE A SEGFAULT 
+        //// This is because for now the yaml architecture is undecided and as such the targets and the duvbib values are not loaded in the plasma phase and cannnot
+        //// be retrieved here: getTarget and getDuvib will segfault.
+        //// Be careful, once the yaml architecture is loaded, there might be two objects: electron collisions and reactions. 
+        //// Please ensure that the loop currently made only on reactions will also engulf the collisions, otherwise the model will seem to work but produce wrong results.
+
+
+        // for (size_t n = 0; n < m_kin->nReactions(); n++) {
+        //     string reac_target_spec = m_plasma->getTarget(n);
+        //     if (reac_target_spec == vib_spec_here) {
+        //         double DUVibValue = m_plasma->getDuvib(n)*ElectronCharge; // convert to Joules
+        //         disVibVPower[k] += DUVibValue * m_kr[n] * Avogadro; //multiply by the avogadro number to actually get a power
+        //     }
+             
+        // }
     } 
+    // writelog("[DEBUG] MARKER 4\n");
 }
+
+
 
 // TO BE IMPLEMENTED WITH REAL VALUES LATER, FOR NOW RUNS JUST TO SHOW THE CODE STRCUTURE BUL ALL EVIB IS SET TO 0
 void PlasmaReactor::compute_RvtVPower() {
     //printf("Computing vibrational relaxation power");
     size_t n_vib_species = m_nspevib;
+
+    double* evib_array = new double[n_vib_species];
+
+    m_plasma->getVibrationalEnergies(evib_array);
     
     for (size_t n=0; n<n_vib_species; n++){
         RvtVPower[n] = 0;
+        double tau = compute_TauRelax(n);
+        RvtVPower[n] = evib_array[n]/tau;
     }
 
 }
@@ -375,6 +403,99 @@ void  PlasmaReactor::recoverVibSpecies(){
         printf("Vibrational species %ld: %s\n", n, vib_spec[n].c_str());
     }
 }
+
+double PlasmaReactor::compute_TauRelax(size_t n){
+    
+    double tau = 0;
+    string spec_name = vib_spec[n];
+    // printf("Computing relaxation time for species %s\n", spec_name.c_str());
+    if (relax_type == "Millikan&White"){
+        tau = tau_millikan_white(spec_name);
+    }
+    else if (relax_type == "Castela"){
+        tau = tau_castela(spec_name);
+    }
+    else if (relax_type == "Constant"){
+        tau = tau_relax_constant_model;
+    }
+    else if (relax_type == "Starikovskiy"){
+        tau = tau_starikovskiy(n);
+    }
+    
+    else{
+        throw CanteraError("PlasmaReactor::compute_TauRelax",
+                           "Error: species vibrational relaxation type not implemented. Please correct the YAML file or implement this species correlation.");
+    }
+    
+    return tau;
+}
+
+double PlasmaReactor::tau_millikan_white(string spec_name){
+    throw CanteraError("PlasmaReactor::compute_TauRelax",
+                           "Error: Millikan&White relaxation implementation is currently incomplete");
+}
+
+double PlasmaReactor::tau_castela(string spec_name){
+    throw CanteraError("PlasmaReactor::compute_TauRelax",
+                           "Error: Castela relaxation implementation is currently incomplete");
+}
+
+double PlasmaReactor::tau_starikovskiy(size_t n){
+    throw CanteraError("PlasmaReactor::compute_TauRelax",
+                           "Error: Starikovskiy relaxation implementation is currently incomplete");
+}
+
+
+//// USELESS FOR THE REACTOR ITSELF BUT USEFUL FOR THE PYTHON BININGS:
+
+std::vector<double> PlasmaReactor::get_disVibVPower() {
+    compute_disVibVPower();
+    return disVibVPower;
+}
+
+std::vector<double> PlasmaReactor::get_RvtVPower() {
+    compute_RvtVPower();
+    return RvtVPower;
+}
+
+std::vector<double> PlasmaReactor::get_eVib() {
+    size_t n_vib_species = m_nspevib;
+    std::vector<double> to_return(n_vib_species);
+
+    double* evib_array = new double[n_vib_species];
+    m_plasma->getVibrationalEnergies(evib_array);
+
+    for (size_t n = 0; n < n_vib_species; ++n) {
+        to_return[n] = evib_array[n];
+    }
+
+    delete[] evib_array;
+    return to_return;
+}
+
+void PlasmaReactor::setVibRelaxType(string relax_type_name){
+    relax_type = relax_type_name;
+    printf("Relaxation type set to %s\n", relax_type.c_str());}
+
+string PlasmaReactor::getVibRelaxType(){
+    return relax_type;
+}
+
+double PlasmaReactor::getVibConstantModelTauRelax(){
+    return tau_relax_constant_model;
+}
+
+void PlasmaReactor::setVibConstantModelTauRelax(double tau_to_set){
+    tau_relax_constant_model = tau_to_set;
+    printf("Relaxation time constant model set to %f\n", tau_relax_constant_model);}
+
+double PlasmaReactor::Max(double a, double b){
+    if (a>b) {
+        return a;
+    } else{
+        return b;
+    }
+    }
 
 }
 

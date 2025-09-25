@@ -9,6 +9,8 @@ from .kinetics cimport *
 from .func1 cimport *
 from .jacobians cimport *
 
+from libcpp.string cimport string as cpp_string
+
 cdef extern from "cantera/numerics/Integrator.h" namespace "Cantera":
     # SUNDIALS integrator
     cdef cppclass CxxIntegrator "Cantera::Integrator":
@@ -85,6 +87,13 @@ cdef extern from "cantera/zerodim.h" namespace "Cantera":
         double disVol()
         void setDisVol(double)
         double disVPower()
+        vector[double] get_disVibVPower()
+        vector[double] get_RvtVPower()
+        vector[double] get_eVib()
+        void setVibRelaxType(string)
+        string getVibRelaxType()
+        double getVibConstantModelTauRelax();
+        void setVibConstantModelTauRelax(double);
         
     # reactor surface
 

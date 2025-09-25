@@ -100,6 +100,7 @@ void Reactor::initialize(double t0)
     m_thermo->restoreState(m_state);
     m_sdot.resize(m_nsp, 0.0);
     m_wdot.resize(m_nsp, 0.0);
+    m_kr.resize(m_kin->nReactions(),0.0);
     updateConnected(true);
 
     for (size_t n = 0; n < m_wall.size(); n++) {

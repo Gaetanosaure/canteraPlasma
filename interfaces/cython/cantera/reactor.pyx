@@ -11,6 +11,15 @@ from ._utils import *
 from .delegator cimport *
 from .drawnetwork import *
 
+from libcpp.string cimport string as cpp_string
+
+cdef list _vec_to_list(const vector[double]& vec):
+    cdef Py_ssize_t n = vec.size()
+    py_list = [0.0]*n
+    for i in range(n):
+        py_list[i] = vec[i]
+    return py_list
+
 cdef class ReactorBase:
     """
     Common base class for reactors and reservoirs.
@@ -483,6 +492,46 @@ cdef class PlasmaReactor(Reactor):
     @property
     def dis_power(self):
         return (<CxxPlasmaReactor*> self.reactor).disVPower()
+    
+    @property
+    def vib_relax_const_model_value(self):
+        return (<CxxPlasmaReactor*> self.reactor).getVibConstantModelTauRelax()
+
+    @vib_relax_const_model_value.setter
+    def vib_relax_const_model_value(self, tau_const):
+        (<CxxPlasmaReactor*> self.reactor).setVibConstantModelTauRelax(tau_const)
+    
+    @property
+    def vib_relax_type(self):
+        """
+        Chaîne décrivant le modèle de relaxation vibrationnelle.
+        """
+        cdef cpp_string cpp_val = (<CxxPlasmaReactor*> self.reactor).getVibRelaxType()
+        return cpp_val.decode('utf-8')
+
+    @vib_relax_type.setter
+    def vib_relax_type(self, relax_type):
+        cdef cpp_string c_relax = relax_type.encode('utf-8')
+        (<CxxPlasmaReactor*> self.reactor).setVibRelaxType(c_relax)
+    
+    @property
+    def dis_power(self):
+        return (<CxxPlasmaReactor*> self.reactor).disVPower()
+
+    @property
+    def dis_vib_v_power(self):
+        cdef vector[double] result = (<CxxPlasmaReactor*> self.reactor).get_disVibVPower()
+        return _vec_to_list(result)
+
+    @property
+    def rvt_v_power(self):
+        cdef vector[double] result = (<CxxPlasmaReactor*> self.reactor).get_RvtVPower()
+        return _vec_to_list(result)
+
+    @property
+    def evib(self):
+        cdef vector[double] result = (<CxxPlasmaReactor*> self.reactor).get_eVib()
+        return _vec_to_list(result)
 
 
 cdef class FlowReactor(Reactor):

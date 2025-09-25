@@ -61,6 +61,29 @@ public:
 
     void recoverVibSpecies();
 
+    double compute_TauRelax(size_t n);
+
+    double  tau_millikan_white(string spec_name);
+
+    double  tau_castela(string spec_name);
+
+    double  tau_starikovskiy(size_t n);
+
+    std::vector<double> get_disVibVPower();
+
+    std::vector<double> get_RvtVPower();
+
+    std::vector<double> get_eVib();
+
+    void setVibRelaxType(string relax_type_name);
+
+    string getVibRelaxType();
+
+    double getVibConstantModelTauRelax();
+
+    void setVibConstantModelTauRelax(double tau_to_set);
+
+    double Max(double a, double b);
 
 
 protected:
@@ -80,6 +103,9 @@ protected:
 
     PlasmaPhase* m_plasma = nullptr; // pointer to the plasma phase initialisation
 
+    string relax_type = "Constant"; // relaxation type to be chosen by the user. It will be Castela, Starikovski, Constant or MillikanandWhite
+
+    double tau_relax_constant_model = 1e-4; // relaxation time for the constant model
 
     Kinetics* m_kinetics;
 
