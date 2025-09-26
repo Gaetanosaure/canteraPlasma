@@ -25,6 +25,8 @@ namespace Cantera
  * This reduces the number of transport equations for vibrational DOFs to one
  * per vibrational species while retaining their coupling to the thermal energy
  * via vibration–translation (V–T) relaxation.
+ * 
+ * The PlasmaReactor class can only be used with a PlasmaPhase.
  *
  * \section equations Governing equations
  *
@@ -128,17 +130,17 @@ public:
 
     void eval(double t, double* LHS, double* RHS) override;
 
-    //! Set/Get discharge volume
+    //! Set discharge volume
     void setDisVol(double dis_vol) {
         m_dis_vol = dis_vol;
     }
+    //! Get discharge volume
     double disVol() const {
         return m_dis_vol;
     }
 
     //! Get discharge volumetric power
     //CQM may not be up to date
-    // 
     double disVPower() const{
         return m_disVPower;
     }
@@ -146,59 +148,182 @@ public:
     size_t componentIndex(const string& nm) const override;
     string componentName(size_t k) override;
 
+    /** 
+    * Computes the volumetric power density of energy transfer from the electric field to the electrons in the plasma.
+    * The formula used is:
+    * @f$ P = e * n_e * mu_e * E^2 @f$
+    * where:
+    * - P is the power density (W/m^3)
+    * - e is the elementary charge (C)
+    * - n_e is the electron number density (m^-3)
+    * - mu_e is the electron mobility (m^2/(V·s))
+    * - E is the electric field strength (V/m)
+    */
     void compute_disVPower();
 
+    /**
+     * Computes the distribution of volumetric discharge power density into vibrational excitation for all vibrational species if there are any.
+     * Unit: W/m^3
+     */
     void compute_disVibVPower();
 
+    /**
+     * Computes the vibrational-translational relaxation volumetric power density for all vibrational species if there are any. 
+     * It physically corresponds to the process of slow gas heating.
+     * Unit: W/m^3
+     */
     void compute_RvtVPower();
 
+    /**
+     * Recovers from the plasma phase the names of the declared vibrational species and stores them in the vector vib_spec.
+     */
     void recoverVibSpecies();
 
+    /**
+     * Computes the characteristic V–T relaxation time @f$\tau_n@f$ of vibrational species number @f$n@f$ in the mixture.
+     * Unit: s
+     * @param n Index of the vibrational species in the vector vib_spec.
+     * @return The characteristic V–T relaxation time @f$\tau_n@f$ of vibrational species number @f$n@f$ in the mixture.
+     * @warning This function requires that the user has specified a relaxation model. This model can be one of the four following choices: 
+     * \li "Constant": @see tau_relax_constant_model
+     * \li "Castela": @see tau_castela
+     * \li "Starikovski": @see tau_starikovskiy
+     * \li "MillikanandWhite": @see tau_millikan_white
+     */
     double compute_TauRelax(size_t n);
 
+    /**
+     * Computes the characteristic V–T relaxation time @f$\tau_j@f$ of vibrational species @f$j@f$ in the mixture using the Millikan&White correlation.
+     * Unit: s
+     * @param spec_name Name of the vibrational species.
+     * @return The characteristic V–T relaxation time of the named vibrational species.
+     */
     double  tau_millikan_white(string spec_name);
 
+    /**
+     * Computes the characteristic V–T relaxation time @f$\tau_j@f$ of vibrational species @f$j@f$ in the mixture using the Castela correlation.
+     * Unit: s
+     * @param spec_name Name of the vibrational species.
+     * @return The characteristic V–T relaxation time of the named vibrational species.
+     */
     double  tau_castela(string spec_name);
 
+     /**
+     * Computes the characteristic V–T relaxation time @f$\tau_j@f$ of vibrational species @f$j@f$ in the mixture using the Starikovskiy correlation.
+     * Unit: s
+     * @param spec_name Name of the vibrational species.
+     * @return The characteristic V–T relaxation time of the named vibrational species.
+     */
     double  tau_starikovskiy(size_t n);
 
+    /**
+     * Updates and returns the mean vibrational power density of the declared vibrational species.
+     * Unit: W/m^3
+     * @return A vector containing the mean vibrational power density of each vibrational species.
+     */
     std::vector<double> get_disVibVPower();
 
+    /**
+     * Updates and returns the mean vibrational power density of V-T relaxations for the declared vibrational species.
+     * Unit: W/m^3
+     * @return A vector containing the mean vibrational power density of V-T relaxations for each vibrational species.
+     */
     std::vector<double> get_RvtVPower();
 
+    /**
+     * Updates and returns the mean energy stored in the vibrational degrees of freedom of the declared vibrational species.
+     * Unit: J/m^3
+     * @return A vector containing the mean vibrational energy for each vibrational species.
+     */
     std::vector<double> get_eVib();
 
+    /**
+     * Sets the vibrational relaxation model to be used by the PlasmaReactor. The model can be one of the four following choices:
+     * \li "Constant": @see tau_relax_constant_model
+     * \li "Castela": @see tau_castela
+     * \li "Starikovski": @see tau_starikovskiy
+     * \li "MillikanandWhite": @see tau_millikan_white
+     * @param relax_type_name Name of the relaxation model to be used. Default is "Constant".
+     * For practicity, the names are accepted with any combination of upper and lower cases.
+     */
     void setVibRelaxType(string relax_type_name);
 
+    /**
+     * Returns the name of the vibrational relaxation model set in the PlasmaReactor.
+     */
     string getVibRelaxType();
 
+    /**
+     * Returns the constant characteristic V–T relaxation time @f$\tau@f$ currently set in the "Constant" relaxation model.
+     * Unit: s
+     */
     double getVibConstantModelTauRelax();
 
+    /**
+     * Sets the constant characteristic V–T relaxation time @f$\tau@f$ to be used in the "Constant" relaxation model.
+     * Unit: s
+     * @param tau_to_set The constant characteristic V–T relaxation time @f$\tau@f$
+     */
     void setVibConstantModelTauRelax(double tau_to_set);
 
+    /**
+     * Compares two doubles and returns the maximum of the two.
+     * @param a First double to compare.
+     * @param b Second double to compare.
+     * @return The maximum of the two doubles.
+     */
     double Max(double a, double b);
 
     // a structure to store the relaxation time data for the starikovski model. The data will be read from a yaml file provided by the user.
+    /**
+     * @struct RelaxationEntry
+     * @brief Structure to store relaxation time data for the Starikovski model. This date is read from a YAML file provided by the userif any, otherwise the default file provided in the "data" folder will be used.
+     */
     struct RelaxationEntry {
         std::string name;
         std::string target;
         double A, n, K, B, C, m, D, z;
     };
 
+    /**
+     * Computes the reaction constant @f$k_{jc}@f$ for V–T relaxation between vibrational species @f$j@f$ and collision partner @f$c@f$ using the Starikovskiy correlation.
+     * Unit: kmol·m@sup{-3}·s@sup{-1}
+     * @param entry RelaxationEntry structure containing the parameters of the correlation for the considered pair of species.
+     * @param T Temperature of the mixture in K.
+     * @return The reaction constant @f$k_{jc}@f$ for the corresponding electron collision reaction.
+     */
     double compute_k(const RelaxationEntry& entry, double T);
 
-    string starikovskiy_yaml_path = "init";  // the path to the yaml file containing the relaxation data for the Starikovskiy model provided by the user
+    /**
+     * Path to the yaml file containing the relaxation data for the Starikovskiy model provided by the user.
+     */
+    string starikovskiy_yaml_path = "init"; 
 
+    /**
+     * Sets the path to the yaml file containing the relaxation data for the Starikovskiy model provided by the user.
+     * @param path Path to the yaml file.
+     * If no file is provided by the user, the code will default to the one stored in data. 
+     */
     void setStarikovskiyYamlPath(string path) {
         starikovskiy_yaml_path = path;
     }
 
+    /**
+     * Returns the path to the yaml file containing the relaxation data for the Starikovskiy model provided by the user.
+     */
     string getStarikovskiyYamlPath() {
         return starikovskiy_yaml_path;
 }
 
+    /**
+     * Reads the yaml file containing the relaxation data for the Starikovskiy model and stores it in the m_data_starikovskiy vector.
+     * If no file is provided by the user, the code will default to the one stored in data. 
+     */
     void readStarikovskiyRelaxYamlFile(string filename);
 
+    /**
+     * Resets the boolean starikovskiy_read to false. This function is useful to avoid reading the yaml file several times.
+     */
     void initializeStarikovskiyReading(){
         starikovskiy_read = false;
     }
@@ -213,24 +338,23 @@ protected:
 
     std::vector<double> disVibVPower; //!< Volumetric discharge power going into vibrational excitation
 
-    std::vector<double> RvtVPower; // Vibrational energy relaxation into heat
+    std::vector<double> RvtVPower; //!< Vibrational energy relaxation into heat
 
     size_t m_nspevib = 0; //!< Number of species with vibrational excitation
 
-    std::vector<std::string> vib_spec; // a vector to store the names of vibrational species
+    std::vector<std::string> vib_spec; //!< a vector to store the names of vibrational species
 
-    PlasmaPhase* m_plasma = nullptr; // pointer to the plasma phase initialisation
+    PlasmaPhase* m_plasma = nullptr; //!< pointer to the plasma phase initialisation
 
-    string relax_type = "Constant"; // relaxation type to be chosen by the user. It will be Castela, Starikovski, Constant or MillikanandWhite
+    string relax_type = "Constant"; //!< relaxation type to be chosen by the user. It will be Castela, Starikovski, Constant or MillikanandWhite
 
-    double tau_relax_constant_model = 1e-4; // relaxation time for the constant model
+    double tau_relax_constant_model = 1e-4; //!< relaxation time for the constant model
 
-    std::vector<std::vector<RelaxationEntry>> m_data_starikovskiy; // relaxation data input from the relaxation yaml file provided by the user. Used by the Starikovskiy model
+    std::vector<std::vector<RelaxationEntry>> m_data_starikovskiy; //!< relaxation data input from the relaxation yaml file provided by the user. Used by the Starikovskiy model
 
-    bool starikovskiy_read = false; // boolean to check if the yaml file has been read or not, to avoid reading it several times
+    bool starikovskiy_read = false; //!< boolean to check if the yaml file has been read or not, to avoid reading it several times
 
-
-    Kinetics* m_kinetics;
+    Kinetics* m_kinetics; //!< pointer to the kinetics of the plasma phase
 
 
 };
