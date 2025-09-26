@@ -336,13 +336,13 @@ void PlasmaReactor::compute_disVPower() {
         m_disVPower = 0;
     }
     else{
-        writelog("[DEBUFG] m_plasma->nElectron(): {}\n", m_plasma->nElectron());
-        writelog("[DEBUFG] m_plasma->electronMobility(): {}\n", m_plasma->electronMobility());
-        writelog("[DEBUFG] m_plasma->electricField(): {}\n", m_plasma->electricField());
+        //writelog("[DEBUFG] m_plasma->nElectron(): {}\n", m_plasma->nElectron());
+        //writelog("[DEBUFG] m_plasma->electronMobility(): {}\n", m_plasma->electronMobility());
+        //writelog("[DEBUFG] m_plasma->electricField(): {}\n", m_plasma->electricField());
         m_disVPower = ElectronCharge * m_plasma->nElectron()
             * m_plasma->electronMobility()
             * pow(m_plasma->electricField(), 2);
-        writelog("[DEBUFG] m_disVPower: {}\n", m_disVPower);
+        //writelog("[DEBUFG] m_disVPower: {}\n", m_disVPower);
     }
 }
 

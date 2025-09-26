@@ -99,7 +99,7 @@ int EEDFTwoTermApproximation::calculateDistributionFunction()
 
     // update electron mobility
     m_electronMobility = electronMobility(m_f0);
-    writelog("[DEBUG] EEFD electron mobility: {:15.3g} [m^2/(V.s)]\n", m_electronMobility);
+    // writelog("[DEBUG] EEFD electron mobility: {:15.3g} [m^2/(V.s)]\n", m_electronMobility);
     return 0;
 }
 
