@@ -336,9 +336,13 @@ void PlasmaReactor::compute_disVPower() {
         m_disVPower = 0;
     }
     else{
+        writelog("[DEBUFG] m_plasma->nElectron(): {}\n", m_plasma->nElectron());
+        writelog("[DEBUFG] m_plasma->electronMobility(): {}\n", m_plasma->electronMobility());
+        writelog("[DEBUFG] m_plasma->electricField(): {}\n", m_plasma->electricField());
         m_disVPower = ElectronCharge * m_plasma->nElectron()
             * m_plasma->electronMobility()
             * pow(m_plasma->electricField(), 2);
+        writelog("[DEBUFG] m_disVPower: {}\n", m_disVPower);
     }
 }
 
@@ -421,12 +425,10 @@ double PlasmaReactor::compute_TauRelax(size_t n){
     else if (relax_type == "Starikovskiy" || relax_type == "starikovskiy"){
         tau = tau_starikovskiy(n);
     }
-    
     else{
         throw CanteraError("PlasmaReactor::compute_TauRelax",
                            "Error: species vibrational relaxation type not implemented. Only Castela, Constant, Millikan&White and Starikovskiy models are implemented");
     }
-    
     return tau;
 }
 
@@ -464,13 +466,85 @@ double PlasmaReactor::tau_castela(string spec_name){
         tau = 1/(1/tau_n2 + 1/tau_o2 + 1/tau_o);
         
     }
-    printf("tau_castela for species %s = %e\n", spec_name.c_str(), tau);
+    printf("tau_castela for species %s = %e [s] \n", spec_name.c_str(), tau);
     return tau;
 }
-double PlasmaReactor::tau_starikovskiy(size_t n){
-    throw CanteraError("PlasmaReactor::compute_TauRelax",
-                           "Error: Starikovskiy relaxation implementation is currently incomplete");
+
+// Fonction pour calculer k(T) en cm3/s
+double PlasmaReactor::compute_k(const RelaxationEntry& entry, double T) {
+    return entry.A * std::pow(T, entry.n) * std::exp(
+        entry.K - entry.B / std::pow(T, 1.0 / 3.0)
+                 + entry.C / std::pow(T, entry.m)
+                 + entry.D / std::pow(T, entry.z)
+    );
 }
+
+void PlasmaReactor::readStarikovskiyRelaxYamlFile(string filename){
+    // On retrouve le chemin complet à partir du nom de fichier
+    std::string full_path;
+    try {
+        full_path = findInputFile(filename);  // cherche dans tous les chemins Cantera
+    } catch (CanteraError& err) {
+        throw CanteraError("PlasmaReactor::readStarikovskiyRelaxYamlFile",
+            "Could not find the YAML file for Starikovskiy relaxation: {}\n"
+            "File requested: {}\n", err.what(), filename);
+    }
+
+    YAML::Node root = YAML::LoadFile(full_path);
+
+    for (size_t n=0; n<m_nspevib; n++){
+        string spec_name = vib_spec[n];
+        printf("Reading STARIKOVSKIY DATA YAML file for species %s\n", spec_name.c_str()); 
+        std::string key = spec_name + "_relaxations";
+
+        std::vector<RelaxationEntry> reactions;
+        for (const auto& node : root[key]) {
+            RelaxationEntry r;
+            r.name = node["name"].as<std::string>();
+            r.target = node["target"].as<std::string>();
+            r.A = node["A"].as<double>();
+            r.n = node["n"].as<double>();
+            r.K = node["K"].as<double>();
+            r.B = node["B"].as<double>();
+            r.C = node["C"].as<double>();
+            r.m = node["m"].as<double>();
+            r.D = node["D"].as<double>();
+            r.z = node["z"].as<double>();
+            reactions.push_back(r);
+        }
+        m_data_starikovskiy.push_back(reactions);
+    }
+}
+
+
+double PlasmaReactor::tau_starikovskiy(size_t n){
+
+    if (!starikovskiy_read) {
+        if (starikovskiy_yaml_path == "init"){
+            starikovskiy_yaml_path = "plasma_relax/starikovskiy_default.yaml"; // default path
+            printf("No yaml file provided for the Starikovskiy relaxation model but this model is used\n. Using default path %s\n", starikovskiy_yaml_path.c_str());
+        }
+        readStarikovskiyRelaxYamlFile(starikovskiy_yaml_path);
+        starikovskiy_read = true;
+    }
+
+    double one_over_tau = 0;
+    double T = m_plasma->temperature();
+    double avogadro_per_mol = Avogadro/1000;
+
+    // std::cout << "Reactions rates for target " << vib_spec[n] << " at T = " << T << " K:\n";
+    for (const auto& r : m_data_starikovskiy[n]) {
+        double k = 1e-6*compute_k(r, T); // convert to m3/s bc the result from compute_k is in cm3/s
+        // std::cout << "  " << r.name << ": k = " << k << "\n";
+        double x_partner = m_plasma->moleFraction(r.name); // loop over all the species and moleFraction returns 0 if the species is not in the phase
+        double mixture_molar_density = 1000*m_plasma->molarDensity(); // in cantera, the density in kmol/m^3 so we need to convert to mol/m^3 to get things right
+        one_over_tau += k * x_partner * mixture_molar_density * avogadro_per_mol;
+    }
+    double tau = 1/one_over_tau;
+    std::cout << "Starikovskiy relaxation time for " << vib_spec[n] << ": " << tau << "[s]\n";
+
+    return tau;
+} 
 
 
 //// USELESS FOR THE REACTOR ITSELF BUT USEFUL FOR THE PYTHON BININGS:

@@ -302,7 +302,10 @@ protected:
 
     vector<double> m_wdot; //!< Species net molar production rates
     vector<double> m_uk; //!< Species molar internal energies
-    vector<double> m_kr; //!< reactions net molar production rates
+
+    //! reactions net molar production rates. 
+    //!@since New in %Cantera 3.2.
+    vector<double> m_kr; 
     bool m_chem = false;
     bool m_energy = true;
     size_t m_nv = 0;

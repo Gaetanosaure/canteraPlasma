@@ -1,0 +1,36 @@
+N2_relaxations:
+  - name: N2
+    target: N2
+    description: Relaxation of vibrational modes of N2 by collisions with N2
+    A: 1.362e-22
+    n: 1
+    K: 24.829
+    B: 221
+    C: 0
+    m: 0
+    D: 0
+    z: 0
+
+  - name: O2
+    target: N2
+    description: Relaxation of vibrational modes of N2 by collisions with O2
+    A: 1.362e-22
+    n: 1
+    K: 25.1755
+    B: 229
+    C: 0
+    m: 0
+    D: 0
+    z: 0
+
+  - name: O
+    target: N2
+    description: Relaxation of vibrational modes of N2 by collisions with O
+    A: 1.362e-22
+    n: 1
+    K: 19.506
+    B: 72.4
+    C: 0
+    m: 0
+    D: 0
+    z: 0

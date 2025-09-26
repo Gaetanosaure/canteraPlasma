@@ -219,3 +219,16 @@ elif env["CC"] == "cl":
 
 env['cantera_shlib'] = lib
 localenv.Depends(lib, localenv['config_h_target'])
+
+
+# Install the YAML with the relaxation models for the PlasmaReactor Starikovskiy model
+plasma_files = [
+    '#data/plasma_relax/starikovskiy_default.yaml',
+    '#data/plasma_relax/castela_emulator.yaml',
+]
+
+dest = '$ct_datadir/plasma_relax'   # $ct_datadir = .../share/cantera/data
+installed = env.Install(dest, plasma_files)
+
+env.Alias('install', installed)     # pour « scons install »
+env.Default(installed)              # pour un simple « scons » (facultatif)

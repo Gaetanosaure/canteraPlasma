@@ -85,7 +85,7 @@ class PlasmaPhase: public IdealGasPhase
 public:
     //! Construct and initialize a PlasmaPhase object
     //! directly from an input file. The constructor initializes the electron
-    //! energy distribution to be Druyvesteyn distribution (m_x = 2.0). The initial
+    //! energy distribution to be Druyvesteyn distribution (m_x = 2.0). The initial default
     //! electron energy grid is set to a linear space which starts at 0.01 eV and ends
     //! at 1 eV with 1000 points.
     /*!
