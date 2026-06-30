@@ -113,6 +113,9 @@ public:
     //! Get electron energy levels.
     //! @param  levels The vector of electron energy levels (eV). Length: #m_nPoints
     void getElectronEnergyLevels(span<double> levels) const {
+        if (m_distributionType == "Boltzmann-two-term") {
+            const_cast<PlasmaPhase*>(this)->updateElectronEnergyDistribution();
+        }
         checkArraySize("PlasmaPhase::getElectronEnergyLevels",
             levels.size(), m_nPoints);
         Eigen::Map<Eigen::ArrayXd>(levels.data(), levels.size()) =
@@ -131,6 +134,9 @@ public:
     //! @param  distrb The vector of electron energy distribution.
     //!                Length: #m_nPoints.
     void getElectronEnergyDistribution(span<double> distrb) const {
+        if (m_distributionType == "Boltzmann-two-term") {
+            const_cast<PlasmaPhase*>(this)->updateElectronEnergyDistribution();
+        }
         checkArraySize("PlasmaPhase::getElectronEnergyDistribution",
             distrb.size(), m_nPoints);
         Eigen::Map<Eigen::ArrayXd>(distrb.data(), distrb.size()) =
@@ -220,6 +226,9 @@ public:
 
     //! Number of electron levels
     size_t nElectronEnergyLevels() const {
+        if (m_distributionType == "Boltzmann-two-term") {
+            const_cast<PlasmaPhase*>(this)->updateElectronEnergyDistribution();
+        }
         return m_nPoints;
     }
 

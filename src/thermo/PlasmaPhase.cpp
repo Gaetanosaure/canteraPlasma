@@ -96,6 +96,9 @@ void PlasmaPhase::updateElectronEnergyDistribution()
         // cross-section data.
         auto ierr = m_eedfSolver->calculateDistributionFunction();
         if (ierr == 0) {
+            if (!m_eedfSolver->f0ComputedAtLastCall()) {
+                return;
+            }
             auto levels = m_eedfSolver->getGridEdge();
             auto y = m_eedfSolver->getEEDFEdge();
 
@@ -1041,6 +1044,10 @@ void PlasmaPhase::updateElasticElectronEnergyLossCoefficient(size_t i)
 
 double PlasmaPhase::elasticPowerLoss()
 {
+    if (m_distributionType == "Boltzmann-two-term") {
+        updateElectronEnergyDistribution();
+    }
+
     if (m_electronEnergyDist.size() != m_nPoints
         || m_electronEnergyDistDiff.size() != m_nPoints) {
         throw CanteraError("PlasmaPhase::elasticPowerLoss:",
@@ -1220,6 +1227,7 @@ double PlasmaPhase::electronMobility() const
 {
     // Only implemented when using the Boltzmann two-term EEDF
     if (m_distributionType == "Boltzmann-two-term") {
+        const_cast<PlasmaPhase*>(this)->updateElectronEnergyDistribution();
         return m_eedfSolver->getElectronMobility();
     } else {
         throw NotImplementedError("PlasmaPhase::electronMobility",

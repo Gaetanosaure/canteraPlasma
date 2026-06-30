@@ -20,7 +20,16 @@ ElectronCollisionPlasmaData::ElectronCollisionPlasmaData()
 
 bool ElectronCollisionPlasmaData::update(const ThermoPhase& phase, const Kinetics& kin)
 {
-    const PlasmaPhase& pp = dynamic_cast<const PlasmaPhase&>(phase);
+    auto& pp = const_cast<PlasmaPhase&>(
+        dynamic_cast<const PlasmaPhase&>(phase));
+
+    // Keep the EEDF synchronized "lazily" when electron-collision rates are updated.
+    // The Boltzmann solver itself decides whether the current gas density,
+    // temperature, reduced electric field, and target mole fractions require a
+    // new EEDF calculation.
+    if (pp.electronEnergyDistributionType() == "Boltzmann-two-term") {
+        pp.updateElectronEnergyDistribution();
+    }
 
     // The distribution number dictates whether the rate should be updated.
     // Three scenarios involving changes of the distribution number:
@@ -31,7 +40,7 @@ bool ElectronCollisionPlasmaData::update(const ThermoPhase& phase, const Kinetic
         return false;
     }
 
-    // Update the cached eedf from the plasma phase.
+    // Update the cached EEDF from the plasma phase.
     m_dist_number = pp.distributionNumber();
     distribution.resize(pp.nElectronEnergyLevels());
     pp.getElectronEnergyDistribution(distribution);
@@ -42,6 +51,7 @@ bool ElectronCollisionPlasmaData::update(const ThermoPhase& phase, const Kinetic
         energyLevels.resize(pp.nElectronEnergyLevels());
         pp.getElectronEnergyLevels(energyLevels);
     }
+
     return true;
 }
 

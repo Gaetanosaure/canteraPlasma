@@ -133,14 +133,121 @@ void EEDFTwoTermApproximation::setCustomGrid(span<const double> levels)
     setGridCache();
 }
 
+bool EEDFTwoTermApproximation::parameterChanged(double current,
+                                                double previous,
+                                                double rtol,
+                                                double atol) const
+{
+    if (!std::isfinite(current) || !std::isfinite(previous)) {
+        return true;
+    }
+
+    double diff = std::abs(current - previous);
+
+    if (diff <= atol) {
+        return false;
+    }
+
+    double scale = std::max(std::abs(current), std::abs(previous));
+
+    if (scale == 0.0) {
+        return diff > atol;
+    }
+
+    return diff / scale > rtol;
+}
+
+bool EEDFTwoTermApproximation::checkParamsVariation()
+{
+    if (!m_has_EEDF || !m_f0_ok) {
+        m_f0_ok = false;
+        return true;
+    }
+
+    double density = m_phase->density();
+    double temperature = m_phase->temperature();
+    double EN = m_phase->reducedElectricField();
+
+    if (!std::isfinite(density) || density <= 0.0) {
+        throw CanteraError("EEDFTwoTermApproximation::checkParamsVariation",
+            "Gas mass density must be finite and positive.");
+    }
+
+    if (!std::isfinite(temperature) || temperature <= 0.0) {
+        throw CanteraError("EEDFTwoTermApproximation::checkParamsVariation",
+            "Gas temperature must be finite and positive.");
+    }
+
+    if (!std::isfinite(EN) || EN < 0.0) {
+        throw CanteraError("EEDFTwoTermApproximation::checkParamsVariation",
+            "Reduced electric field must be finite and non-negative.");
+    }
+
+    m_dDensity = std::abs(density - m_density_prev);
+    m_dTemperature = std::abs(temperature - m_temperature_prev);
+    m_dEN = std::abs(EN - m_EN_prev);
+
+    if (parameterChanged(density, m_density_prev,
+                         m_density_rtol, m_density_atol)) {
+        m_f0_ok = false;
+        return true;
+    }
+
+    if (parameterChanged(temperature, m_temperature_prev,
+                         m_temperature_rtol, m_temperature_atol)) {
+        m_f0_ok = false;
+        return true;
+    }
+
+    if (parameterChanged(EN, m_EN_prev, m_EN_rtol, m_EN_atol)) {
+        m_f0_ok = false;
+        return true;
+    }
+
+    if (m_X_targets.size() != m_X_targets_prev.size()) {
+        m_f0_ok = false;
+        return true;
+    }
+
+    for (size_t k = 0; k < m_X_targets.size(); k++) {
+        if (std::abs(m_X_targets[k] - m_X_targets_prev[k]) >= m_X_atol) {
+            m_f0_ok = false;
+            return true;
+        }
+    }
+
+    m_f0_ok = true;
+    return false;
+}
+
+void EEDFTwoTermApproximation::storeCurrentParamsForEEDF()
+{
+    m_density_prev = m_phase->density();
+    m_temperature_prev = m_phase->temperature();
+    m_EN_prev = m_phase->reducedElectricField();
+
+    m_X_targets_prev = m_X_targets;
+    m_f0_ok = true;
+}
+
 int EEDFTwoTermApproximation::calculateDistributionFunction()
 {
+    m_f0_computed_at_last_call = false;
+
     if (m_first_call) {
         initSpeciesIndexCrossSections();
         m_first_call = false;
+        m_f0_ok = false;
     }
 
     updateMoleFractions();
+
+    if (!checkParamsVariation()) {
+        return 0;
+    }
+
+    m_f0_computed_at_last_call = true;
+
     checkSpeciesNoCrossSection();
     updateCrossSections();
 
@@ -267,6 +374,9 @@ int EEDFTwoTermApproximation::calculateDistributionFunction()
 
     // Update electron mobility.
     m_electronMobility = computeElectronMobility(m_f0);
+
+    // Store the state for which the current EEDF is valid.
+    storeCurrentParamsForEEDF();
 
     return 0;
 }
@@ -663,6 +773,11 @@ void EEDFTwoTermApproximation::updateMoleFractions()
     for (size_t k = 0; k < m_X_targets.size(); k++) {
         m_X_targets[k] = m_phase->moleFraction(m_k_lg_Targets[k]);
         tmp_sum = tmp_sum + m_phase->moleFraction(m_k_lg_Targets[k]);
+    }
+
+    if (!std::isfinite(tmp_sum) || tmp_sum <= 0.0) {
+    throw CanteraError("EEDFTwoTermApproximation::updateMoleFractions",
+        "The sum of target mole fractions is invalid or zero.");
     }
 
     // Normalize the mole fractions to unity:

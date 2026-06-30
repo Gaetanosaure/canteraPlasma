@@ -71,6 +71,16 @@ public:
      */
     int calculateDistributionFunction();
 
+//! Return whether f0 was recomputed during the last call to calculateDistributionFunction().
+/*!
+ * A return value of false means that the previously computed EEDF was considered
+ * valid for the current gas density, temperature, reduced electric field, and
+ * target mole fractions.
+ */
+bool f0ComputedAtLastCall() const {
+    return m_f0_computed_at_last_call;
+}
+
     //! Sets a linear energy grid for the EEDF solver, defined by the maximum energy and the number of grid cells.
     void setLinearGrid(double& kTe_max, size_t& ncell);
 
@@ -415,6 +425,49 @@ protected:
      * Townsend by setReducedFieldThresholdBeforeMaxwellianTd().
      */
     double EN_min = 1e-21; 
+
+    //! Check whether the current plasma state changed enough to recompute the EEDF.
+    bool checkParamsVariation();
+
+    //! Store the current plasma state as the reference state for the latest EEDF.
+    void storeCurrentParamsForEEDF();
+
+    //! Return true if a scalar parameter changed beyond absolute and relative tolerances.
+    bool parameterChanged(double current, double previous,
+                        double rtol, double atol) const;
+
+    //! True if the current EEDF is valid for the current plasma state.
+    bool m_f0_ok = false;
+
+    //! True if f0 was recomputed during the last call to calculateDistributionFunction().
+    bool m_f0_computed_at_last_call = false;
+
+    //! Previous gas mass density used to compute the EEDF [kg/m^3].
+    double m_density_prev = NAN;
+
+    //! Previous gas temperature used to compute the EEDF [K].
+    double m_temperature_prev = NAN;
+
+    //! Previous reduced electric field used to compute the EEDF [V m^2].
+    double m_EN_prev = NAN;
+
+    //! Absolute variations, mostly useful for debugging.
+    double m_dDensity = 0.0;
+    double m_dTemperature = 0.0;
+    double m_dEN = 0.0;
+
+    //! Tolerances for automatic EEDF recomputation.
+    double m_density_rtol = 1e-3;
+    double m_density_atol = 0.0;
+
+    double m_temperature_rtol = 1e-3;
+    double m_temperature_atol = 1e-6;
+
+    double m_EN_rtol = 1e-3;
+    double m_EN_atol = 1e-24; // 1e-3 Td in SI units [V m^2]
+
+    //! Absolute tolerance for normalized target mole fractions.
+    double m_X_atol = 1e-4;
 
 }; // end of class EEDFTwoTermApproximation
 
