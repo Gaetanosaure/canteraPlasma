@@ -91,6 +91,9 @@ void PlasmaPhase::updateElectronEnergyDistribution()
     } else if (m_distributionType == "isotropic") {
         setIsotropicElectronEnergyDistribution();
     } else if (m_distributionType == "Boltzmann-two-term") {
+        //set-up the electron collisions before calling the EEDF.
+        const double nElectron = concentration(m_electronSpeciesIndex) * Avogadro; // [1/m3]
+        m_eedfSolver->setupEeCol(ionDegree(), nElectron);
         // The two-term Boltzmann solver may adapt the electron energy grid, so both
         // the grid and the distribution are copied back before invalidating dependent
         // cross-section data.
@@ -409,6 +412,10 @@ void PlasmaPhase::getParameters(AnyMap& phaseNode) const
         eedf["normalize"] = m_do_normalizeElectronEnergyDist;
     }
     phaseNode["electron-energy-distribution"] = std::move(eedf);
+    if (m_distributionType == "Boltzmann-two-term") {
+        eedf["electron-electron-collisions"] =
+            m_eedfSolver->electronElectronCollisionsEnabled();
+    }
 }
 
 void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
@@ -453,6 +460,12 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
             setDiscretizedElectronEnergyDist(levels, distribution);
         } else if (m_distributionType == "Boltzmann-two-term") {
             m_eedfSolver = make_unique<EEDFTwoTermApproximation>(this);
+
+            bool enableEeCollisions = false;
+            if (eedf.hasKey("electron-electron-collisions")) {
+                enableEeCollisions = eedf["electron-electron-collisions"].asBool();
+            }
+            m_eedfSolver->enableElectronElectronCollisions(enableEeCollisions);
 
             if (eedf.hasKey("energy-levels")) {
                 // Mode A: user-provided grid edges.
@@ -1354,5 +1367,4 @@ void PlasmaPhase::checkVibrationalReservoirMoleFractions()
         }
     }
 }
-
 }

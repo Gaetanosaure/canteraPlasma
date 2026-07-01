@@ -391,13 +391,13 @@ public:
         m_electricField = E;
     }
 
-    // @todo Add the method to compute the degree of ionization of the plasma.
-    //!Calculate the degree of ionization
-    //double ionDegree() const {
-    //    double ne = concentration(m_electronSpeciesIndex); // [kmol/m³]
-    //    double n_total = molarDensity();                   // [kmol/m³]
-    //    return ne / n_total;
-    //}
+    //!Calculate the degree of ionization of the plasma.
+    double ionDegree() const {
+       double ne = concentration(m_electronSpeciesIndex); // [kmol/m³]
+       double n_total = molarDensity();                   // [kmol/m³]
+       return ne / n_total;
+    }
+
 
     //! Get the reduced electric field strength [V·m²]
     double reducedElectricField() const {
@@ -586,10 +586,6 @@ protected:
     //! Electron energy levels corresponding to the cross section data. m_energyLevels[i][j],
     //! where i is the specific process, j is the index of vector. Unit: [eV]
     vector<vector<double>> m_energyLevels;
-
-    // @todo Add a variable to track the ionization degree of the plasma.
-    //! ionization degree for the electron-electron collisions (tmp is the previous one)
-    //double m_ionDegree = 0.0;
 
     //! Electron energy distribution Difference dF/dε (V^-5/2)
     Eigen::ArrayXd m_electronEnergyDistDiff;

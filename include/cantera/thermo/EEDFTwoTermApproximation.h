@@ -184,6 +184,13 @@ bool f0ComputedAtLastCall() const {
                                     span<const double> xpts,
                                     span<const double> fpts);
 
+    void enableElectronElectronCollisions(bool enable);
+
+    void setupEeCol(const double ionDegree, const double nElectron);
+
+    bool electronElectronCollisionsEnabled() const {
+        return m_enableEeCollisions;
+    }
 
 protected:
 
@@ -283,6 +290,8 @@ protected:
      * where \f$ z_{i+1/2} = \tilde{w}_{i+1/2} / \tilde{D}_{i+1/2} \f$ (Peclet number).
      */
     Eigen::SparseMatrix<double> matrix_A(const Eigen::VectorXd& f0);
+
+    void eeColIntegrals(const Eigen::VectorXd& f0, vector<double>& A1, vector<double>& A2, vector<double>& A3, double& a) const;
 
     //! Reduced net production frequency. Equation (10) of ref. [1]
     //! divided by N.
@@ -468,6 +477,23 @@ protected:
 
     //! Absolute tolerance for normalized target mole fractions.
     double m_X_atol = 1e-4;
+
+    // Stuff of electron-electron collisions
+
+    bool m_enableEeCollisions = false;
+    bool m_eeCol = false;
+
+    //! Ionization degree above which changes in electron density / ionization degree
+    //! are considered large enough to invalidate the cached EEDF when e-e collisions
+    //! are enabled. This is not the user-facing on/off switch.
+    double m_eeIonDegreeThreshold = 1e-5;
+    double m_eeUpdateRtol = 1e-1;
+
+    double m_ionDegree = 0.0;
+    double m_nElectron = 0.0;
+
+    double m_ionDegree_tmp = NAN;
+    double m_nElectron_tmp = NAN;
 
 }; // end of class EEDFTwoTermApproximation
 

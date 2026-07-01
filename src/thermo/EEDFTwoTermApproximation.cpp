@@ -574,6 +574,16 @@ SparseMat EEDFTwoTermApproximation::matrix_A(const Eigen::VectorXd& f0)
     a0[N+1] = NAN;
     a1[N+1] = NAN;
 
+    // Electron-electron collisions declarations
+    double a = 0.0;
+    vector<double> A1(m_points + 1, 0.0);
+    vector<double> A2(m_points + 1, 0.0);
+    vector<double> A3(m_points + 1, 0.0);
+
+    if (m_eeCol) {
+        eeColIntegrals(f0, A1, A2, A3, a);
+    }
+
     double nDensity = m_phase->molarDensity() * Avogadro;
     double alpha;
     double E = m_phase->electricField();
@@ -601,6 +611,11 @@ SparseMat EEDFTwoTermApproximation::matrix_A(const Eigen::VectorXd& f0)
         double D = DA / sigma_tilde * F + DB;
         if (m_growth == "spatial") {
             W -= m_gamma / 3.0 * 2 * alpha * E / nDensity * m_gridEdge[j] / sigma_tilde;
+        }
+
+        if (m_eeCol) {
+            W -= 3 * a * m_ionDegree * A1[j];
+            D += 2 * a * m_ionDegree * (A2[j] + pow(m_gridEdge[j], 1.5) * A3[j]);
         }
 
         double z = W * (m_gridCenter[j] - m_gridCenter[j-1]) / D;
@@ -657,6 +672,99 @@ SparseMat EEDFTwoTermApproximation::matrix_A(const Eigen::VectorXd& f0)
         }
     }
     return A + G;
+}
+
+// These cumulative integrals are evaluated using the composite trapezoidal rule.
+// Calling numericalQuadrature independently at each grid edge would require
+// O(N^2) work and repeated temporary allocations, whereas the cumulative formulation used here
+// gives the same composite-trapezoidal partial integrals in O(N): much faster on grids with tipically 100 to 
+// 1000 points that we use to solve the EEDF.
+void EEDFTwoTermApproximation::eeColIntegrals(const Eigen::VectorXd& f0, vector<double>& A1, vector<double>& A2, vector<double>& A3, double& a) const
+{
+    const size_t n = m_points;
+
+    if (static_cast<size_t>(f0.size()) != n) {
+        throw CanteraError("EEDFTwoTermApproximation::eeColIntegrals",
+            "Inconsistent EEDF size.");
+    }
+
+    if (!m_eeCol) {
+        A1.assign(n + 1, 0.0);
+        A2.assign(n + 1, 0.0);
+        A3.assign(n + 1, 0.0);
+        a = 0.0;
+        return;
+    }
+
+    if (!std::isfinite(m_nElectron) || m_nElectron <= 0.0) {
+        throw CanteraError("EEDFTwoTermApproximation::eeColIntegrals",
+            "Electron number density must be finite and positive "
+            "when electron-electron collisions are enabled.");
+    }
+
+    vector<double> f0Edge(n + 1);
+
+    f0Edge[0] = f0(0);
+    for (size_t i = 1; i < n; i++) {
+        f0Edge[i] = 0.5 * (f0(i - 1) + f0(i));
+    }
+    f0Edge[n] = f0(n - 1);
+
+    A1.assign(n + 1, 0.0);
+    A2.assign(n + 1, 0.0);
+    A3.assign(n + 1, 0.0);
+
+    // A1[j] = int_0^eps_j sqrt(eps) f0(eps) d eps
+    for (size_t j = 1; j <= n; j++) {
+        const double dx = m_gridEdge[j] - m_gridEdge[j - 1];
+
+        const double yLeft =
+            std::sqrt(m_gridEdge[j - 1]) * f0Edge[j - 1];
+        const double yRight =
+            std::sqrt(m_gridEdge[j]) * f0Edge[j];
+
+        A1[j] = A1[j - 1] + 0.5 * dx * (yLeft + yRight);
+    }
+
+    // A2[j] = int_0^eps_j eps^(3/2) f0(eps) d eps
+    for (size_t j = 1; j <= n; j++) {
+        const double dx = m_gridEdge[j] - m_gridEdge[j - 1];
+
+        const double yLeft =
+            std::pow(m_gridEdge[j - 1], 1.5) * f0Edge[j - 1];
+        const double yRight =
+            std::pow(m_gridEdge[j], 1.5) * f0Edge[j];
+
+        A2[j] = A2[j - 1] + 0.5 * dx * (yLeft + yRight);
+    }
+
+    // A3[j] = int_eps_j^eps_max f0(eps) d eps
+    for (size_t j = n; j > 0; j--) {
+        const double dx = m_gridEdge[j] - m_gridEdge[j - 1];
+
+        A3[j - 1] = A3[j]
+            + 0.5 * dx * (f0Edge[j - 1] + f0Edge[j]);
+    }
+
+    const double kTe = 2.0 / 3.0 * ElectronCharge * A2[n];
+
+    if (!std::isfinite(kTe) || kTe <= 0.0) {
+        throw CanteraError("EEDFTwoTermApproximation::eeColIntegrals",
+            "Invalid electron thermal energy for Coulomb logarithm.");
+    }
+
+    const double coulombParam =
+        12.0 * Pi * std::pow(epsilon_0 * kTe, 1.5)
+        / (std::pow(ElectronCharge, 3) * std::sqrt(m_nElectron));
+
+    if (!std::isfinite(coulombParam) || coulombParam <= 1.0) {
+        throw CanteraError("EEDFTwoTermApproximation::eeColIntegrals",
+            "Invalid Coulomb logarithm argument: {}.", coulombParam);
+    }
+
+    a = std::pow(ElectronCharge, 2) * m_gamma
+        / (24.0 * Pi * std::pow(epsilon_0, 2))
+        * std::log(coulombParam);
 }
 
 double EEDFTwoTermApproximation::netProductionFrequency(const Eigen::VectorXd& f0)
@@ -1117,4 +1225,59 @@ void EEDFTwoTermApproximation::setReducedFieldThresholdBeforeMaxwellianTd(double
     EN_min = threshold*1e-21;
 }
 
+void EEDFTwoTermApproximation::setupEeCol(const double ionDegree,
+                                          const double nElectron)
+{
+    if (!std::isfinite(ionDegree) || ionDegree < 0.0) {
+        throw CanteraError("EEDFTwoTermApproximation::setupEeCol",
+            "Ionization degree must be finite and non-negative.");
+    }
+
+    if (!std::isfinite(nElectron) || nElectron < 0.0) {
+        throw CanteraError("EEDFTwoTermApproximation::setupEeCol",
+            "Electron number density must be finite and non-negative.");
+    }
+
+    const bool oldActive = m_eeCol;
+    const bool oldRelevant =
+        m_enableEeCollisions &&
+        m_ionDegree > m_eeIonDegreeThreshold &&
+        m_nElectron > 0.0;
+
+    m_ionDegree = ionDegree;
+    m_nElectron = nElectron;
+
+    // If the user enabled e-e collisions, the model is active. The magnitude is controlled by m_ionDegree.
+    m_eeCol = m_enableEeCollisions && m_nElectron > 0.0;
+
+    // The model is relevant if the ionization degree is above the threshold and e-e collisions are enabled.
+    const bool newRelevant =
+        m_eeCol &&
+        m_ionDegree > m_eeIonDegreeThreshold;
+
+    bool needRecompute = oldActive != m_eeCol || oldRelevant != newRelevant;
+
+    if (newRelevant) {
+        needRecompute =
+            needRecompute ||
+            parameterChanged(m_ionDegree, m_ionDegree_tmp,
+                             m_eeUpdateRtol, 0.0) ||
+            parameterChanged(m_nElectron, m_nElectron_tmp,
+                             m_eeUpdateRtol, 0.0);
+    }
+
+    if (needRecompute) {
+        m_f0_ok = false;
+    }
+
+    m_ionDegree_tmp = m_ionDegree;
+    m_nElectron_tmp = m_nElectron;
+}
+void EEDFTwoTermApproximation::enableElectronElectronCollisions(bool enable)
+{
+    if (m_enableEeCollisions != enable) {
+        m_enableEeCollisions = enable;
+        m_f0_ok = false;
+    }
+}
 }
