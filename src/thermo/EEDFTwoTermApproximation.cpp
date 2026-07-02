@@ -133,10 +133,7 @@ void EEDFTwoTermApproximation::setCustomGrid(span<const double> levels)
     setGridCache();
 }
 
-bool EEDFTwoTermApproximation::parameterChanged(double current,
-                                                double previous,
-                                                double rtol,
-                                                double atol) const
+bool EEDFTwoTermApproximation::parameterChanged(double current, double previous, double rtol, double atol) const
 {
     if (!std::isfinite(current) || !std::isfinite(previous)) {
         return true;
@@ -181,16 +178,6 @@ bool EEDFTwoTermApproximation::checkParamsVariation()
     if (!std::isfinite(EN) || EN < 0.0) {
         throw CanteraError("EEDFTwoTermApproximation::checkParamsVariation",
             "Reduced electric field must be finite and non-negative.");
-    }
-
-    m_dDensity = std::abs(density - m_density_prev);
-    m_dTemperature = std::abs(temperature - m_temperature_prev);
-    m_dEN = std::abs(EN - m_EN_prev);
-
-    if (parameterChanged(density, m_density_prev,
-                         m_density_rtol, m_density_atol)) {
-        m_f0_ok = false;
-        return true;
     }
 
     if (parameterChanged(temperature, m_temperature_prev,

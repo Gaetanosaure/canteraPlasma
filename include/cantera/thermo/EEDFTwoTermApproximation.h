@@ -460,23 +460,16 @@ protected:
     //! Previous reduced electric field used to compute the EEDF [V m^2].
     double m_EN_prev = NAN;
 
-    //! Absolute variations, mostly useful for debugging.
-    double m_dDensity = 0.0;
-    double m_dTemperature = 0.0;
-    double m_dEN = 0.0;
-
     //! Tolerances for automatic EEDF recomputation.
-    double m_density_rtol = 1e-3;
-    double m_density_atol = 0.0;
 
-    double m_temperature_rtol = 1e-3;
-    double m_temperature_atol = 1e-6;
+    double m_temperature_rtol = 3.16e-2; // from ZDPlaskin
+    double m_temperature_atol = 0.05; // from ZDPlaskin
 
-    double m_EN_rtol = 1e-3;
-    double m_EN_atol = 1e-24; // 1e-3 Td in SI units [V m^2]
+    double m_EN_rtol = 0.01; // from cantera-plasma-CERFACS (0.001 in ZDPlaskin)
+    double m_EN_atol = 1e-22; // 0.1 Td in SI units [V m^2] from cantera-plasma-CERFACS (1e-24 in ZDPlaskin)
 
     //! Absolute tolerance for normalized target mole fractions.
-    double m_X_atol = 1e-4;
+    double m_X_atol = 1e-3; // devised based on cantera-plasma-CERFACS (fixed at 1e-2) and chemplaskin sensitivity analysis
 
     // Stuff of electron-electron collisions
 
