@@ -467,6 +467,32 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
             }
             m_eedfSolver->enableElectronElectronCollisions(enableEeCollisions);
 
+            if (eedf.hasKey("eedf-recalculation-tolerances")) {
+                const AnyMap tol = eedf["eedf-recalculation-tolerances"].as<AnyMap>();
+
+                if (tol.hasKey("gas-temperature-rtol") || tol.hasKey("gas-temperature-atol")) {
+                    double rtol = tol.hasKey("gas-temperature-rtol")
+                        ? tol["gas-temperature-rtol"].asDouble() : 3.16e-2;
+                    double atol = tol.hasKey("gas-temperature-atol")
+                        ? tol["gas-temperature-atol"].asDouble() : 0.05;
+
+                    m_eedfSolver->setTemperatureTolerance(rtol, atol);
+                }
+
+                if (tol.hasKey("reduced-electric-field-rtol") || tol.hasKey("reduced-electric-field-atol")) {
+                    double rtol = tol.hasKey("reduced-electric-field-rtol")
+                        ? tol["reduced-electric-field-rtol"].asDouble() : 1.0e-2;
+                    double atol = tol.hasKey("reduced-electric-field-atol")
+                        ? tol["reduced-electric-field-atol"].asDouble() : 1.0e-22;
+
+                    m_eedfSolver->setReducedElectricFieldTolerance(rtol, atol);
+                }
+
+                if (tol.hasKey("target-mole-fraction-atol")) {
+                    m_eedfSolver->setTargetMoleFractionTolerance(tol["target-mole-fraction-atol"].asDouble());
+                }
+            }
+
             if (eedf.hasKey("energy-levels")) {
                 // Mode A: user-provided grid edges.
                 // In this mode, the grid is considered explicit and fixed by default.

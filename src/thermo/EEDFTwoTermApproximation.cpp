@@ -1212,6 +1212,65 @@ void EEDFTwoTermApproximation::setReducedFieldThresholdBeforeMaxwellianTd(double
     EN_min = threshold*1e-21;
 }
 
+void checkTolerancePair(const string& name, double rtol, double atol)
+{
+    if (!std::isfinite(rtol) || !std::isfinite(atol) ||
+        rtol < 0.0 || atol < 0.0 || (rtol == 0.0 && atol == 0.0)) {
+        throw CanteraError("EEDFTwoTermApproximation::" + name,
+            "Tolerances must be finite and non-negative, and at least one of "
+            "rtol / atol must be positive.");
+    }
+}
+
+void checkAbsoluteTolerance(const string& name, double atol)
+{
+    if (!std::isfinite(atol) || atol < 0.0) {
+        throw CanteraError("EEDFTwoTermApproximation::" + name,
+            "Absolute tolerance must be finite and non-negative.");
+    }
+}
+
+void EEDFTwoTermApproximation::setTemperatureTolerance(double rtol, double atol)
+{
+    checkTolerancePair("setTemperatureTolerance", rtol, atol);
+
+    m_temperature_rtol = rtol;
+    m_temperature_atol = atol;
+    m_f0_ok = false;
+}
+
+void EEDFTwoTermApproximation::setReducedElectricFieldTolerance(double rtol,
+                                                               double atol)
+{
+    checkTolerancePair("setReducedElectricFieldTolerance", rtol, atol);
+
+    m_EN_rtol = rtol;
+    m_EN_atol = atol;
+    m_f0_ok = false;
+}
+
+void EEDFTwoTermApproximation::setTargetMoleFractionTolerance(double atol)
+{
+    checkAbsoluteTolerance("setTargetMoleFractionTolerance", atol);
+
+    m_X_atol = atol;
+    m_f0_ok = false;
+}
+
+void EEDFTwoTermApproximation::setEEDFRecalculationTolerances(
+    double temperatureRtol,
+    double temperatureAtol,
+    double reducedFieldRtol,
+    double reducedFieldAtol,
+    double targetMoleFractionAtol)
+{
+    setTemperatureTolerance(temperatureRtol, temperatureAtol);
+    setReducedElectricFieldTolerance(reducedFieldRtol, reducedFieldAtol);
+    setTargetMoleFractionTolerance(targetMoleFractionAtol);
+
+    m_f0_ok = false;
+}
+
 void EEDFTwoTermApproximation::setupEeCol(const double ionDegree,
                                           const double nElectron)
 {

@@ -168,6 +168,29 @@ bool f0ComputedAtLastCall() const {
     //! Controls the threshold below which the EEDF solver does not solve for the EEDF but imposes a Maxwellian distribution.
     void setReducedFieldThresholdBeforeMaxwellianTd(double threshold); 
 
+    //! Set tolerances controlling automatic EEDF recomputation.
+    /*!
+     * @param temperatureRtol Relative tolerance for gas temperature.
+     * @param temperatureAtol Absolute tolerance for gas temperature [K].
+     * @param reducedFieldRtol Relative tolerance for reduced electric field.
+     * @param reducedFieldAtol Absolute tolerance for reduced electric field [V m^2].
+     * @param targetMoleFractionAtol Absolute tolerance for normalized target mole fractions.
+     */
+    void setEEDFRecalculationTolerances(double temperatureRtol,
+                                        double temperatureAtol,
+                                        double reducedFieldRtol,
+                                        double reducedFieldAtol,
+                                        double targetMoleFractionAtol);
+
+    //! Set gas-temperature tolerance for automatic EEDF recomputation.
+    void setTemperatureTolerance(double rtol, double atol);
+
+    //! Set reduced-electric-field tolerance for automatic EEDF recomputation.
+    void setReducedElectricFieldTolerance(double rtol, double atol);
+
+    //! Set absolute tolerance for normalized target mole fractions.
+    void setTargetMoleFractionTolerance(double atol);
+
     //! An extension of the linearInterp function that returns specified values when the input is
     //! out of bounds instead of returning one of the extremities of the list.
     double linearInterpBounded(double x,
