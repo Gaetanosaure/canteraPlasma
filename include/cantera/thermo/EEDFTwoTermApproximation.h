@@ -474,9 +474,6 @@ protected:
     //! True if f0 was recomputed during the last call to calculateDistributionFunction().
     bool m_f0_computed_at_last_call = false;
 
-    //! Previous gas mass density used to compute the EEDF [kg/m^3].
-    double m_density_prev = NAN;
-
     //! Previous gas temperature used to compute the EEDF [K].
     double m_temperature_prev = NAN;
 

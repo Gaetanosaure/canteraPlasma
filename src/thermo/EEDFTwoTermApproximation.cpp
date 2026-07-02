@@ -209,7 +209,6 @@ bool EEDFTwoTermApproximation::checkParamsVariation()
 
 void EEDFTwoTermApproximation::storeCurrentParamsForEEDF()
 {
-    m_density_prev = m_phase->density();
     m_temperature_prev = m_phase->temperature();
     m_EN_prev = m_phase->reducedElectricField();
 
