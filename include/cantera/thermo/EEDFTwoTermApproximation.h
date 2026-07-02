@@ -469,7 +469,7 @@ protected:
     double m_EN_atol = 1e-22; // 0.1 Td in SI units [V m^2] from cantera-plasma-CERFACS (1e-24 in ZDPlaskin)
 
     //! Absolute tolerance for normalized target mole fractions.
-    double m_X_atol = 1e-3; // devised based on cantera-plasma-CERFACS (fixed at 1e-2) and chemplaskin sensitivity analysis
+    double m_X_atol = 1e-2; // devised based on cantera-plasma-CERFACS (fixed at 1e-2) and chemplaskin sensitivity analysis
 
     // Stuff of electron-electron collisions
 
