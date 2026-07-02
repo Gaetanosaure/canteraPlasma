@@ -582,6 +582,11 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
                         enabled = adapt["enabled"].asBool();
                     }
 
+                    bool maxwellian_reset = true;
+                    if (adapt.hasKey("maxwellian-reset")) {
+                        maxwellian_reset = adapt["maxwellian-reset"].asBool();
+                    }
+
                     double minDecayDecades = 8.0;
                     if (adapt.hasKey("min_decay_decades")) {
                         minDecayDecades = adapt["min_decay_decades"].asDouble();
@@ -605,7 +610,7 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
 
                     m_eedfSolver->setGridAdaptationParameters(
                         enabled, minDecayDecades, maxDecayDecades,
-                        updateFactor, maxIterations);
+                        updateFactor, maxIterations, maxwellian_reset);
                 } else {
                     m_eedfSolver->enableGridAdaptation(false);
                 }

@@ -312,13 +312,21 @@ int EEDFTwoTermApproximation::calculateDistributionFunction()
                     // The right boundary is too low: the tail has not decayed enough.
                     double newMaxEnergy = m_kTeMax * (1.0 + m_gridUpdateFactor);
 
+                    Eigen::VectorXd oldGridCenter = m_gridCenter;
+                    Eigen::VectorXd oldF0 = m_f0;
+
                     updateGrid(newMaxEnergy);
 
-                    if (m_firstguess == "maxwell") {
-                        setMaxwellian(m_init_kTe);
+                    if (m_maxwellianReset) {
+                        if (m_firstguess == "maxwell") {
+                            setMaxwellian(m_init_kTe);
+                        } else {
+                            throw CanteraError("EEDFTwoTermApproximation::calculateDistributionFunction",
+                                "Unknown EEDF first guess '{}'.", m_firstguess);
+                        }
                     } else {
-                        throw CanteraError("EEDFTwoTermApproximation::calculateDistributionFunction",
-                            "Unknown EEDF first guess '{}'.", m_firstguess);
+                        writelog("Hey! Maxwellian reset is off!\n");
+                        projectPreviousEEDFOnCurrentGrid(oldGridCenter, oldF0);
                     }
 
                     updateCrossSections();
@@ -328,20 +336,26 @@ int EEDFTwoTermApproximation::calculateDistributionFunction()
                     // The right boundary is unnecessarily high.
                     double newMaxEnergy = m_kTeMax / (1.0 + m_gridUpdateFactor);
 
+                    Eigen::VectorXd oldGridCenter = m_gridCenter;
+                    Eigen::VectorXd oldF0 = m_f0;
+
                     updateGrid(newMaxEnergy);
 
-                    if (m_firstguess == "maxwell") {
-                        setMaxwellian(m_init_kTe);
+                    if (m_maxwellianReset) {
+                        if (m_firstguess == "maxwell") {
+                            setMaxwellian(m_init_kTe);
+                        } else {
+                            throw CanteraError("EEDFTwoTermApproximation::calculateDistributionFunction",
+                                "Unknown EEDF first guess '{}'.", m_firstguess);
+                        }
                     } else {
-                        throw CanteraError("EEDFTwoTermApproximation::calculateDistributionFunction",
-                            "Unknown EEDF first guess '{}'.", m_firstguess);
+                        writelog("Hey! Maxwellian reset is off!\n");
+                        projectPreviousEEDFOnCurrentGrid(oldGridCenter, oldF0);
                     }
 
                     updateCrossSections();
                     converge(m_f0);
 
-                } else {
-                    break;
                 }
             }
         }
@@ -1143,7 +1157,8 @@ void EEDFTwoTermApproximation::setGridAdaptationParameters(bool enabled,
                                                            double minDecayDecades,
                                                            double maxDecayDecades,
                                                            double updateFactor,
-                                                           size_t maxIterations)
+                                                           size_t maxIterations, 
+                                                           bool maxwellian_reset)
 {
     if (!std::isfinite(minDecayDecades) || !std::isfinite(maxDecayDecades) ||
         minDecayDecades <= 0.0 || maxDecayDecades <= minDecayDecades) {
@@ -1166,6 +1181,7 @@ void EEDFTwoTermApproximation::setGridAdaptationParameters(bool enabled,
     m_maxEedfDecay = maxDecayDecades;
     m_gridUpdateFactor = updateFactor;
     m_maxGridAdaptIterations = maxIterations;
+    m_maxwellianReset = maxwellian_reset;
 }
 
 void EEDFTwoTermApproximation::updateGrid(double maxEnergy)
@@ -1324,5 +1340,37 @@ void EEDFTwoTermApproximation::enableElectronElectronCollisions(bool enable)
         m_enableEeCollisions = enable;
         m_f0_ok = false;
     }
+}
+
+void EEDFTwoTermApproximation::projectPreviousEEDFOnCurrentGrid(
+    const Eigen::VectorXd& oldGridCenter,
+    const Eigen::VectorXd& oldF0)
+{
+    if (oldGridCenter.size() != oldF0.size() || oldGridCenter.size() < 2) {
+        throw CanteraError("EEDFTwoTermApproximation::projectPreviousEEDFOnCurrentGrid",
+            "Previous EEDF and grid must have matching sizes of at least two points.");
+    }
+
+    const double fFloor = 1e-300;
+
+    vector<double> oldGrid(oldGridCenter.data(),
+        oldGridCenter.data() + oldGridCenter.size());
+
+    vector<double> oldF(oldF0.data(),
+        oldF0.data() + oldF0.size());
+
+    for (size_t j = 0; j < m_points; j++) {
+        m_f0(j) = std::max(fFloor,
+            linearInterpBounded(m_gridCenter[j], oldGrid, oldF, fFloor, fFloor));
+    }
+
+    double fnorm = norm(m_f0, m_gridCenter);
+
+    if (!std::isfinite(fnorm) || fnorm <= 0.0) {
+        throw CanteraError("EEDFTwoTermApproximation::projectPreviousEEDFOnCurrentGrid",
+            "Invalid norm after projecting previous EEDF onto the adapted grid.");
+    }
+
+    m_f0 /= fnorm;
 }
 }

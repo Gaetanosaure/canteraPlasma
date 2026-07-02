@@ -142,7 +142,7 @@ bool f0ComputedAtLastCall() const {
                                     double minDecayDecades,
                                     double maxDecayDecades,
                                     double updateFactor,
-                                    size_t maxIterations);
+                                    size_t maxIterations, bool maxwellian_reset);
 
     //! Return the electron energy grid edges [eV].
     /*!
@@ -345,6 +345,10 @@ protected:
     //!
     void checkSpeciesNoCrossSection();
 
+    //! Project a previously converged EEDF onto the current energy grid.
+    //! Used as first guess after grid adaptation when Maxwellian reset is disabled.
+    void projectPreviousEEDFOnCurrentGrid(const Eigen::VectorXd& oldGridCenter, const Eigen::VectorXd& oldF0);
+
     //! Compute the L1 norm of a function f defined over a given energy grid.
     //!
     //! @param f     Vector representing the function values (EEDF)
@@ -507,6 +511,8 @@ protected:
 
     double m_ionDegree_tmp = NAN;
     double m_nElectron_tmp = NAN;
+
+    bool m_maxwellianReset = true; // base parameter for the non-pro user for code solidity.
 
 }; // end of class EEDFTwoTermApproximation
 
