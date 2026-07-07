@@ -397,25 +397,32 @@ void PlasmaPhase::setIsotropicShapeFactor(double x)
 void PlasmaPhase::getParameters(AnyMap& phaseNode) const
 {
     IdealGasPhase::getParameters(phaseNode);
+
     AnyMap eedf;
     eedf["type"] = m_distributionType;
+
     vector<double> levels(m_nPoints);
-    Eigen::Map<Eigen::ArrayXd>(levels.data(), m_nPoints) = m_electronEnergyLevels;
+    Eigen::Map<Eigen::ArrayXd>(levels.data(), m_nPoints) =
+        m_electronEnergyLevels;
     eedf["energy-levels"] = levels;
+
     if (m_distributionType == "isotropic") {
         eedf["shape-factor"] = m_isotropicShapeFactor;
         eedf["mean-electron-energy"].setQuantity(meanElectronEnergy(), "eV");
     } else if (m_distributionType == "discretized") {
         vector<double> dist(m_nPoints);
-        Eigen::Map<Eigen::ArrayXd>(dist.data(), m_nPoints) = m_electronEnergyDist;
+        Eigen::Map<Eigen::ArrayXd>(dist.data(), m_nPoints) =
+            m_electronEnergyDist;
         eedf["distribution"] = dist;
         eedf["normalize"] = m_do_normalizeElectronEnergyDist;
-    }
-    phaseNode["electron-energy-distribution"] = std::move(eedf);
-    if (m_distributionType == "Boltzmann-two-term") {
+    } else if (m_distributionType == "Boltzmann-two-term") {
         eedf["electron-electron-collisions"] =
             m_eedfSolver->electronElectronCollisionsEnabled();
+        eedf["super-elastic-collisions"] =
+            m_eedfSolver->superElasticCollisionsEnabled();
     }
+
+    phaseNode["electron-energy-distribution"] = std::move(eedf);
 }
 
 void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
@@ -466,6 +473,27 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
                 enableEeCollisions = eedf["electron-electron-collisions"].asBool();
             }
             m_eedfSolver->enableElectronElectronCollisions(enableEeCollisions);
+
+            bool enableSuperElasticCollisions = false;
+            if (eedf.hasKey("super-elastic-collisions")) {
+                enableSuperElasticCollisions =
+                    eedf["super-elastic-collisions"].asBool();
+            }
+            m_eedfSolver->enableSuperElasticCollisions(
+                enableSuperElasticCollisions);
+
+            if (eedf.hasKey("min-super-elastic-convergence-iterations")) {
+                size_t minIterations = eedf["min-super-elastic-convergence-iterations"].asInt();
+                m_eedfSolver->setMinSuperElasticIterations(minIterations);
+            }
+
+            // writelog(
+            //     "EEDF-SE-DEBUG PHASE_EEDF_OPTIONS: type='{}', "
+            //     "enableEeCollisions={}, enableSuperElasticCollisions={}\n",
+            //     m_distributionType,
+            //     enableEeCollisions,
+            //     enableSuperElasticCollisions
+            // );
 
             if (eedf.hasKey("eedf-recalculation-tolerances")) {
                 const AnyMap tol = eedf["eedf-recalculation-tolerances"].as<AnyMap>();
@@ -542,6 +570,13 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
 
                 m_eedfSolver->setGridType(energyLevelsDistribution);
                 m_eedfSolver->setInitialGridParameters(initialMaxEnergy, nGridCells);
+                // writelog(
+                //     "EEDF-SE-DEBUG PHASE_GRID_OPTIONS: initialMaxEnergy={}, nGridCells={}, "
+                //     "gridType='{}'\n",
+                //     initialMaxEnergy,
+                //     nGridCells,
+                //     energyLevelsDistribution
+                // );
 
                 if (energyLevelsDistribution == "Linear") {
                     m_eedfSolver->setLinearGrid(initialMaxEnergy, nGridCells);
@@ -611,6 +646,16 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
                     m_eedfSolver->setGridAdaptationParameters(
                         enabled, minDecayDecades, maxDecayDecades,
                         updateFactor, maxIterations, maxwellian_reset);
+                    // writelog(
+                    //     "EEDF-SE-DEBUG PHASE_GRID_ADAPT: enabled={}, minDecayDecades={}, "
+                    //     "maxDecayDecades={}, updateFactor={}, maxIterations={}, maxwellianReset={}\n",
+                    //     enabled,
+                    //     minDecayDecades,
+                    //     maxDecayDecades,
+                    //     updateFactor,
+                    //     maxIterations,
+                    //     maxwellian_reset
+                    // );
                 } else {
                     m_eedfSolver->enableGridAdaptation(false);
                 }
@@ -648,6 +693,11 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
             }
         }
     }
+
+    // writelog(
+    //     "EEDF-SE-DEBUG PHASE_COLLISION_DEFINITIONS: nDefinitions={}\n",
+    //     m_electronCollisionDefinitions.size()
+    // );
 
     // in the case of a wrong combination of the two entry formats (should the user mix new and old formats somehow), ensure that each collision is only loaded once
     if (rootNode.hasKey("reactions")) {
@@ -863,6 +913,24 @@ void PlasmaPhase::addCollision(shared_ptr<Reaction> collision)
             "or a valid 'collision' reference.");
     }
 
+    // writelog(
+    //     "EEDF-SE-DEBUG PHASE_ADD_COLLISION_DATA: i={}, equation='{}', "
+    //     "collision='{}', targetFromReaction='{}', rateTarget='{}', "
+    //     "rateProduct='{}', correspondingSpecies='{}', kind='{}', "
+    //     "threshold={}, degeneracyRatio={}, hasCrossSectionData={}\n",
+    //     i,
+    //     collision->equation(),
+    //     ratePtr->collisionName(),
+    //     target,
+    //     ratePtr->target(),
+    //     ratePtr->product(),
+    //     ratePtr->correspondingSpecies(),
+    //     ratePtr->kind(),
+    //     ratePtr->threshold(),
+    //     ratePtr->superElasticDegeneracyRatio(),
+    //     ratePtr->hasCrossSectionData()
+    // );
+
     if (!ratePtr->target().empty() && ratePtr->target() != target) {
         throw CanteraError("PlasmaPhase::addCollision",
             "Electron collision '{}' targets '{}', but reaction '{}' uses target '{}'.",
@@ -872,6 +940,16 @@ void PlasmaPhase::addCollision(shared_ptr<Reaction> collision)
 
     string kindFromReaction = inferElectronCollisionKind(collision);
     string kindFromCollision = ratePtr->kind();
+
+    // writelog(
+    //     "EEDF-SE-DEBUG PHASE_KIND_CHECK: i={}, collision='{}', equation='{}', "
+    //     "kindFromReaction='{}', kindFromCollision='{}'\n",
+    //     i,
+    //     ratePtr->collisionName(),
+    //     collision->equation(),
+    //     kindFromReaction,
+    //     kindFromCollision
+    // );
 
     bool compatibleKind = kindFromReaction == kindFromCollision;
 
@@ -938,6 +1016,16 @@ void PlasmaPhase::addCollision(shared_ptr<Reaction> collision)
         m_kInelastic.push_back(i);
     }
 
+    //writelog(
+    //     "EEDF-SE-DEBUG PHASE_ADD_COLLISION_DONE: i={}, collision='{}', "
+    //     "kind='{}', nCollisions={}, nElastic={}, nInelastic={}\n",
+    //     i,
+    //     ratePtr->collisionName(),
+    //     kind,
+    //     m_collisions.size(),
+    //     m_kElastic.size(),
+    //     m_kInelastic.size()
+    // );
 
     auto levels = ratePtr->energyLevels();
     m_energyLevels.emplace_back(levels.begin(), levels.end());

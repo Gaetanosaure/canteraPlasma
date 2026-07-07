@@ -105,6 +105,13 @@ void ElectronCollisionPlasmaRate::getParameters(AnyMap& node) const
     if (!m_product.empty()) {
         node["product"] = m_product;
     }
+    if (!m_correspondingSpecies.empty()) {
+        node["corresponding-species"] = m_correspondingSpecies;
+    }
+
+    if (m_superElasticDegeneracyRatio != 1.0) {
+        node["super-elastic-degeneracy-ratio"] = m_superElasticDegeneracyRatio;
+    }
 }
 
 void ElectronCollisionPlasmaRate::updateInterpolatedCrossSection(
@@ -165,6 +172,13 @@ void ElectronCollisionPlasmaRate::modifyRateConstants(
         return;
     }
 
+    // Defensive guard: reverse super-elastic rates are physically meaningful
+    // only for excitation/de-excitation channels.
+    if (m_kind != "excitation") {
+        kr = 0.0;
+        return;
+    }
+
     // Interpolate cross-sections data to the energy levels of
     // the electron energy distribution function
     if (m_levelNumberSuperelastic != shared_data.levelNumber) {
@@ -196,9 +210,24 @@ void ElectronCollisionPlasmaRate::modifyRateConstants(
     );
 
     // unit in kmol/m3/s
-    kr = pow(2.0 * ElectronCharge / ElectronMass, 0.5) * Avogadro *
+    kr = m_superElasticDegeneracyRatio* pow(2.0 * ElectronCharge / ElectronMass, 0.5) * Avogadro *
          simpson((eps + m_threshold).cwiseProduct(
          distribution.cwiseProduct(m_crossSectionsOffset)), eps);
+
+    // writelog(
+    //     "EEDF-SE-DEBUG RATE_REVERSE_KR: collision='{}', kind='{}', "
+    //     "threshold={}, degeneracyRatio={}, kf={}, kr={}, nGrid={}, "
+    //     "gridFirst={}, gridLast={}\n",
+    //     m_collisionName,
+    //     m_kind,
+    //     m_threshold,
+    //     m_superElasticDegeneracyRatio,
+    //     kf,
+    //     kr,
+    //     shared_data.energyLevels.size(),
+    //     shared_data.energyLevels.empty() ? -1.0 : shared_data.energyLevels.front(),
+    //     shared_data.energyLevels.empty() ? -1.0 : shared_data.energyLevels.back()
+    // );
 }
 
 void ElectronCollisionPlasmaRate::setContext(const Reaction& rxn, const Kinetics& kin)
@@ -249,8 +278,33 @@ void ElectronCollisionPlasmaRate::setContext(const Reaction& rxn, const Kinetics
 
     setDefaultThreshold();
 
+    // writelog(
+    //     "EEDF-SE-DEBUG RATE_CONTEXT: equation='{}', reversible={}, "
+    //     "collision='{}', inferredOrStoredKind='{}', threshold={}, "
+    //     "target='{}', product='{}', correspondingSpecies='{}', degeneracyRatio={}\n",
+    //     rxn.equation(),
+    //     rxn.reversible,
+    //     m_collisionName,
+    //     m_kind,
+    //     m_threshold,
+    //     m_target,
+    //     m_product,
+    //     m_correspondingSpecies,
+    //     m_superElasticDegeneracyRatio
+    // );
+
     if (!rxn.reversible) {
         return; // end checking of forward reaction
+    }
+
+    // Only excitation-like collisions may have a reverse super-elastic rate.
+    // Ionization, attachment, effective and elastic collisions must never be
+    // interpreted as super-elastic channels.
+    if (m_kind != "excitation") {
+        throw InputFileError("ElectronCollisionPlasmaRate::setContext", rxn.input,
+            "Only electron-impact excitation reactions can be reversible "
+            "for super-elastic de-excitation. Reaction '{}' was classified as '{}'.",
+            rxn.equation(), m_kind);
     }
 
     // For super-elastic collisions
@@ -308,6 +362,23 @@ void ElectronCollisionPlasmaRate::applyCollisionData(const AnyMap& node)
         m_product = node["product"].asString();
     }
 
+    if (node.hasKey("corresponding-species")) {
+        m_correspondingSpecies = node["corresponding-species"].asString();
+        if (m_correspondingSpecies.empty()) {
+            throw InputFileError("applyCollisionData", node,
+                "'corresponding-species' cannot be empty.");
+        }
+    }
+
+    m_superElasticDegeneracyRatio =
+        node.getDouble("super-elastic-degeneracy-ratio", 1.0);
+
+    if (!std::isfinite(m_superElasticDegeneracyRatio) ||
+        m_superElasticDegeneracyRatio <= 0.0) {
+        throw InputFileError("applyCollisionData", node,
+            "'super-elastic-degeneracy-ratio' must be finite and positive.");
+    }
+
     if (!node.hasKey("energy-levels")) {
         throw InputFileError("applyCollisionData", node, "Missing 'energy-levels'");
     }
@@ -324,6 +395,25 @@ void ElectronCollisionPlasmaRate::applyCollisionData(const AnyMap& node)
 
     validateCollisionData(node);
     m_hasCrossSectionData = true;
+
+    // writelog(
+    //     "EEDF-SE-DEBUG RATE_APPLY_DATA: collision='{}', kind='{}', "
+    //     "target='{}', product='{}', correspondingSpecies='{}', "
+    //     "threshold={}, degeneracyRatio={}, nLevels={}, "
+    //     "firstLevel={}, firstSigma={}, lastLevel={}, lastSigma={}\n",
+    //     m_collisionName,
+    //     m_kind,
+    //     m_target,
+    //     m_product,
+    //     m_correspondingSpecies,
+    //     m_threshold,
+    //     m_superElasticDegeneracyRatio,
+    //     m_energyLevels.size(),
+    //     m_energyLevels.empty() ? -1.0 : m_energyLevels.front(),
+    //     m_crossSections.empty() ? -1.0 : m_crossSections.front(),
+    //     m_energyLevels.empty() ? -1.0 : m_energyLevels.back(),
+    //     m_crossSections.empty() ? -1.0 : m_crossSections.back()
+    // );
 }
 
 void ElectronCollisionPlasmaRate::validateCollisionData(const AnyMap& node) const
@@ -348,8 +438,25 @@ void ElectronCollisionPlasmaRate::validateCollisionData(const AnyMap& node) cons
         }
     }
 
-    if (!std::isfinite(m_threshold) || m_threshold < 0.0) {
-        throw InputFileError("validateCollisionData" , node, "Inifnite or negative threshold value");
+    // if (!std::isfinite(m_threshold) || m_threshold < 0.0) {
+    //     throw InputFileError("validateCollisionData" , node, "Inifnite or negative threshold value");
+    // }
+
+    if (!std::isfinite(m_threshold)) {
+        throw InputFileError("validateCollisionData", node,
+            "Infinite or non-finite threshold value.");
+    }
+
+    if (m_threshold < 0.0 && m_kind != "excitation") {
+        throw InputFileError("validateCollisionData", node,
+            "Negative threshold values are only allowed for diagnostic "
+            "manual super-elastic excitation-like collisions.");
+    }
+
+    if (m_threshold < 0.0 && m_kind == "excitation") {
+        warn_user("ElectronCollisionPlasmaRate::validateCollisionData",
+            "Negative threshold value detected for an excitation-like collision."
+            "This will be treated as a super-elastic collisions.");
     }
 }
 

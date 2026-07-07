@@ -193,6 +193,28 @@ public:
         return m_threshold;
     }
 
+    //! Species whose mole fraction represents the population reservoir used
+    //! for super-elastic collisions in the EEDF solver.
+    /*!
+     * This is optional. If empty, the EEDF solver will try to infer the
+     * corresponding species from the electron-collision reaction product,
+     * then from #m_product if it is an actual phase species.
+     */
+    const string& correspondingSpecies() const {
+        return m_correspondingSpecies;
+    }
+
+    //! Statistical-weight ratio used for detailed balance of super-elastic
+    //! collisions.
+    /*!
+     * The super-elastic cross section is constructed as
+     * sigma_se(eps) = ratio * (eps + U) / eps * sigma_exc(eps + U).
+     * The default value is 1.0, which preserves the previous behavior.
+     */
+    double superElasticDegeneracyRatio() const {
+        return m_superElasticDegeneracyRatio;
+    }
+
     //! The value of #m_energyLevels [eV]
     span<const double> energyLevels() const {
         return m_energyLevels;
@@ -232,6 +254,23 @@ private:
 
     //! The product of electron collision
     string m_product;
+
+    //! Optional phase species representing the population reservoir associated
+    //! with this collision for super-elastic EEDF terms.
+    /*!
+     * Example: several LXCat-specific products may all correspond to the same
+     * lumped phase species N2(A). In that case, use
+     * corresponding-species: N2(A).
+     */
+    string m_correspondingSpecies;
+
+    //! Statistical-weight ratio for detailed balance of super-elastic collisions.
+    /*!
+     * This is the factor g_lower / g_upper. It defaults to 1.0 because many
+     * lumped or effective cross sections do not have a well-defined microscopic
+     * degeneracy ratio.
+     */
+    double m_superElasticDegeneracyRatio = 1.0;
 
     //! The energy threshold of electron collision
     double m_threshold = 0;

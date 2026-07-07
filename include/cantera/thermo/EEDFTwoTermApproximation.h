@@ -10,6 +10,7 @@
 
 #include "cantera/base/ct_defs.h"
 #include "cantera/numerics/eigen_sparse.h"
+#include "cantera/kinetics/Reaction.h"
 
 namespace Cantera
 {
@@ -215,6 +216,22 @@ bool f0ComputedAtLastCall() const {
         return m_enableEeCollisions;
     }
 
+    //! Enable or disable super-elastic collisions in the Boltzmann two-term EEDF.
+    /*!
+     * This switch only affects the EEDF solver. It does not automatically make
+     * electron-collision reactions reversible in the chemical mechanism.
+     */
+    void enableSuperElasticCollisions(bool enable);
+
+    //! Return whether super-elastic collisions are enabled in the EEDF solver.
+    bool superElasticCollisionsEnabled() const {
+        return m_enableSuperElasticCollisions;
+    }
+
+    void setMinSuperElasticIterations(size_t minIterations) {
+        m_minSuperElasticIterations = minIterations;
+    }
+
 protected:
 
     //! Formerly options for the EEDF solver
@@ -258,6 +275,10 @@ protected:
     //! Iterate f0 (EEDF) until convergence
     void converge(Eigen::VectorXd& f0);
 
+    //! Solve the Boltzmann equation with an optional predictor-corrector pass
+    //! for super-elastic collisions.
+    void solveBoltzmannWithSuperElastic(Eigen::VectorXd& f0);
+
     //! An iteration of solving electron energy distribution function
     Eigen::VectorXd iterate(const Eigen::VectorXd& f0, double delta);
 
@@ -265,6 +286,14 @@ protected:
     //! assuming that u is linear with u(a) = u0 and u(b) = u1
     double integralPQ(double a, double b, double u0, double u1,
                        double g, double x0);
+
+    //! Integral of w(x) exp[g (x0 - x)] over [a, b] assuming w is linear.
+    /*!
+     * Used for super-elastic collisions, where the non-singular quantity
+     * w(eps) = eps * sigma_se(eps) is interpolated directly.
+     */
+    double integralPQWeighted(double a, double b, double w0, double w1,
+                              double g, double x0);
 
     //! Vector g is used by matrix_P() and matrix_Q().
     /**
@@ -302,6 +331,14 @@ protected:
      */
     Eigen::SparseMatrix<double> matrix_Q(span<const double> g, size_t k);
 
+    //! Matrix of scattering-out for super-elastic collisions.
+    Eigen::SparseMatrix<double> matrix_P_superelastic(span<const double> g,
+                                                      size_t k);
+
+    //! Matrix of scattering-in for super-elastic collisions.
+    Eigen::SparseMatrix<double> matrix_Q_superelastic(span<const double> g,
+                                                      size_t k);
+
     //! Matrix A (Ax = b) of the equation of EEDF, which is discretized by the exponential scheme
     //! of Scharfetter and Gummel,
     /**
@@ -329,6 +366,29 @@ protected:
 
     //! Initialize species indices associated with cross-section data
     void initSpeciesIndexCrossSections();
+
+    //! Initialize the list of super-elastic channels and their source species.
+    void initSuperElasticChannels();
+
+    //! Return the phase species used as the population source for a
+    //! super-elastic channel. Returns npos if no valid source can be inferred.
+    size_t inferSuperElasticSourceSpecies(size_t k) const;
+
+    //! Register a super-elastic source species in the local source list.
+    size_t addSuperElasticSourceSpecies(size_t kSource);
+
+    //! Update source mole fractions used by super-elastic EEDF terms.
+    // void updateSuperElasticMoleFractions(double targetMoleFractionSum); / v1
+    void updateSuperElasticMoleFractions();
+
+    //! Forward excitation rate coefficient computed from the current EEDF.
+    double forwardRateCoefficientFromEEDF(const Eigen::VectorXd& f0, size_t k);
+
+    //! Update the automatic partition weights for lumped excited species.
+    void updateSuperElasticWeights(const Eigen::VectorXd& f0);
+
+    //! Super-elastic cross section used in the total collision cross section.
+    double superElasticCrossSection(size_t k, double eps);
 
     //! Update the total cross sections based on the current state
     void updateCrossSections();
@@ -376,6 +436,22 @@ protected:
     //! The energy boundaries of the overlap of cell i and j
     vector<vector<vector<double>>> m_eps;
 
+    //! Location of source cell j for super-elastic grid cache.
+    vector<vector<size_t>> m_jSuperElastic;
+
+    //! Location of destination cell i for super-elastic grid cache.
+    vector<vector<size_t>> m_iSuperElastic;
+
+    //! Energy boundaries of source-cell overlaps for super-elastic collisions.
+    vector<vector<vector<double>>> m_epsSuperElastic;
+
+    //! Values of eps * sigma_superelastic at overlap boundaries.
+    /*!
+     * Storing eps * sigma_se avoids the numerical singularity of
+     * sigma_se = (eps + U) / eps * sigma(eps + U) near eps = 0.
+     */
+    vector<vector<vector<double>>> m_epsSigmaSuperElastic;
+
     //! Normalized electron energy distribution function
     Eigen::VectorXd m_f0;
 
@@ -409,6 +485,32 @@ protected:
 
     //! Previous mole fraction of targets used to compute eedf
     vector<double> m_X_targets_prev;
+
+    //! True for collisions that can contribute a super-elastic EEDF term.
+    vector<bool> m_hasSuperElastic;
+
+    //! Global phase species index of the population source for each collision.
+    vector<size_t> m_superElasticSourceSpecies;
+
+    //! Local source-list index of the population source for each collision.
+    vector<size_t> m_superElasticSourceLoc;
+
+    //! Local-to-global list of super-elastic source species.
+    vector<size_t> m_k_lg_SuperElasticSources;
+
+    //! Normalized mole fractions of super-elastic source species.
+    vector<double> m_X_superElasticSources;
+
+    //! Previous source mole fractions used to decide whether the EEDF is stale.
+    vector<double> m_X_superElasticSources_prev;
+
+    //! Automatic partition weight for each super-elastic collision.
+    /*!
+     * For a lumped source species L, weight_i = P_i / sum_j P_j, where the sum
+     * runs over collisions mapped to L and P_i is the forward production flux
+     * computed using the predictor EEDF.
+     */
+    vector<double> m_superElasticWeights;
 
     //! Multiplicity factor for scattering-in terms in matrix_Q().
     /*!
@@ -513,6 +615,22 @@ protected:
     double m_nElectron_tmp = NAN;
 
     bool m_maxwellianReset = true; // base parameter for the non-pro user for code solidity.
+
+    //! User-facing switch for super-elastic EEDF terms.
+    bool m_enableSuperElasticCollisions = false;
+
+    //! Internal switch used during the corrector solve.
+    /*!
+     * The predictor EEDF is solved with this flag false. After the automatic
+     * partition weights are computed, this flag is set true and the Boltzmann
+     * equation is solved again with super-elastic terms included.
+     */
+    bool m_applySuperElasticCollisions = false;
+
+    //! Minimum number of iterations for super-elastic collisions to be applied in the EEDF solver
+    //! in converge before applying the convergence criteria. This is to avoid the case where
+    //! the EEDF converges too quickly and super-elastic collisions are badly accounted for.
+    size_t m_minSuperElasticIterations = 20;
 
 }; // end of class EEDFTwoTermApproximation
 
