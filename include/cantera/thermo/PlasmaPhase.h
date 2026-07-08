@@ -490,6 +490,15 @@ public:
     //! low enough not to impact the phase chemistry.
     void checkVibrationalReservoirMoleFractions();
 
+    void forceMaxwellianRestart(){
+        if (m_eedfSolver){
+            m_eedfSolver->forceMaxwellianRestart();
+        } else {
+            throw CanteraError("PlasmaPhase::forceMaxwellianRestart", "Impossible to force a restart without an EEDF solver.");
+        }
+        
+    }
+
 protected:
     void updateThermo() const override;
 

@@ -361,7 +361,7 @@ int EEDFTwoTermApproximation::calculateDistributionFunction()
         );
     }
 
-    if (!checkParamsVariation()) {
+    if (!m_forceMaxwellianRestart && !checkParamsVariation()) {
         if (DEBUG_SE) {
             writelog("EEDF-SE-DEBUG CALC_SKIP: EEDF cache accepted, no recomputation.\n");
         }
@@ -418,9 +418,12 @@ int EEDFTwoTermApproximation::calculateDistributionFunction()
     } else {
         // At non-zero reduced electric field, use a hot Maxwellian first guess
         // only when no previously converged EEDF is available.
-        if (!m_has_EEDF) {
+        if (!m_has_EEDF || m_forceMaxwellianRestart) {
             if (m_firstguess == "maxwell") {
                 setMaxwellian(m_init_kTe);
+                if (m_forceMaxwellianRestart){
+                    m_forceMaxwellianRestart = false;
+                }
             } else {
                 throw CanteraError("EEDFTwoTermApproximation::calculateDistributionFunction",
                     "Unknown EEDF first guess '{}'.", m_firstguess);

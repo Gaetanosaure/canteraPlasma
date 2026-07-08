@@ -1900,6 +1900,13 @@ cdef class ThermoPhase(_SolutionBase):
             raise TypeError('This method is invalid for '
                             f'thermo model: {self.thermo_model}.')
         self.plasma.updateElectronEnergyDistribution()
+    
+    def force_maxwellian_restart(self):
+        """ describe later """
+        if not self._enable_plasma:
+            raise TypeError('This method is invalid for '
+                            f'thermo model: {self.thermo_model}.')
+        self.plasma.forceMaxwellianRestart()
 
     property n_electron_energy_levels:
         """ Number of electron energy levels """

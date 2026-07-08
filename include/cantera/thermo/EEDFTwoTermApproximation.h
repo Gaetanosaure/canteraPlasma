@@ -236,6 +236,11 @@ bool f0ComputedAtLastCall() const {
         m_growth = growth;
     }
 
+    void forceMaxwellianRestart(){
+        m_forceMaxwellianRestart = true;
+        m_f0_ok = false;
+    }
+
 protected:
 
     //! Formerly options for the EEDF solver
@@ -635,6 +640,8 @@ protected:
     //! in converge before applying the convergence criteria. This is to avoid the case where
     //! the EEDF converges too quickly and super-elastic collisions are badly accounted for.
     size_t m_minSuperElasticIterations = 20;
+
+    bool m_forceMaxwellianRestart = false;
 
 }; // end of class EEDFTwoTermApproximation
 
