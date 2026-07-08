@@ -232,6 +232,10 @@ bool f0ComputedAtLastCall() const {
         m_minSuperElasticIterations = minIterations;
     }
 
+    void setGrowthModel(const std::string growth) {
+        m_growth = growth;
+    }
+
 protected:
 
     //! Formerly options for the EEDF solver

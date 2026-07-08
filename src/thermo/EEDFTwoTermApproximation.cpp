@@ -1197,34 +1197,48 @@ double EEDFTwoTermApproximation::electronDiffusivity(const Eigen::VectorXd& f0)
 {
     vector<double> y(m_points, 0.0);
     double nu = netProductionFrequency(f0);
+
     for (size_t i = 0; i < m_points; i++) {
-        if (m_gridCenter[i] != 0.0) {
-            y[i] = m_gridCenter[i] * f0(i) /
-                   (m_totalCrossSectionCenter[i] + nu / m_gamma / pow(m_gridCenter[i], 0.5));
+        double sigma_tilde = m_totalCrossSectionCenter[i];
+
+        if (m_growth == "temporal") {
+            sigma_tilde += nu / m_gamma / pow(m_gridCenter[i], 0.5);
         }
+
+        y[i] = m_gridCenter[i] * f0(i) / sigma_tilde;
     }
+
     double nDensity = m_phase->molarDensity() * Avogadro;
     auto f = Eigen::Map<const Eigen::ArrayXd>(y.data(), y.size());
-    auto x = Eigen::Map<const Eigen::ArrayXd>(m_gridCenter.data(), m_gridCenter.size());
-    return 1./3. * m_gamma * simpson(f, x) / nDensity;
+    auto x = Eigen::Map<const Eigen::ArrayXd>(
+        m_gridCenter.data(), m_gridCenter.size());
+
+    return 1.0 / 3.0 * m_gamma * simpson(f, x) / nDensity;
 }
 
 double EEDFTwoTermApproximation::computeElectronMobility(const Eigen::VectorXd& f0)
 {
     double nu = netProductionFrequency(f0);
     vector<double> y(m_points + 1, 0.0);
+
     for (size_t i = 1; i < m_points; i++) {
-        // calculate df0 at i-1/2
-        double df0 = (f0(i) - f0(i-1)) / (m_gridCenter[i] - m_gridCenter[i-1]);
-        if (m_gridEdge[i] != 0.0) {
-            y[i] = m_gridEdge[i] * df0 /
-                   (m_totalCrossSectionEdge[i] + nu / m_gamma / pow(m_gridEdge[i], 0.5));
+        double df0 = (f0(i) - f0(i - 1))
+            / (m_gridCenter[i] - m_gridCenter[i - 1]);
+
+        double sigma_tilde = m_totalCrossSectionEdge[i];
+
+        if (m_growth == "temporal") {
+            sigma_tilde += nu / m_gamma / pow(m_gridEdge[i], 0.5);
         }
+
+        y[i] = m_gridEdge[i] * df0 / sigma_tilde;
     }
+
     double nDensity = m_phase->molarDensity() * Avogadro;
     auto f = ConstMappedVector(y.data(), y.size());
-    auto x = ConstMappedVector(m_gridEdge.data(), m_gridEdge.size()); 
-    return -1./3. * m_gamma * simpson(f, x) / nDensity;
+    auto x = ConstMappedVector(m_gridEdge.data(), m_gridEdge.size());
+
+    return -1.0 / 3.0 * m_gamma * simpson(f, x) / nDensity;
 }
 
 double EEDFTwoTermApproximation::forwardRateCoefficientFromEEDF(
@@ -1366,7 +1380,13 @@ void EEDFTwoTermApproximation::initSpeciesIndexCrossSections()
         const auto& kind = m_phase->collisionRate(k)->kind();
 
         if (kind == "ionization") {
-            m_inFactor[k] = 2;
+            if (m_growth == "none"){
+                m_inFactor[k] = 1;
+            }
+            else {
+                m_inFactor[k] = 2;
+            }
+            
         } else if (kind == "attachment") {
             m_inFactor[k] = 0;
         } else {
@@ -2090,7 +2110,7 @@ void EEDFTwoTermApproximation::setGridCache()
 
         // Forward inelastic cache: existing behavior.
         vector<double> eps1(m_points + 1);
-        int shiftFactor = (collision->kind() == "ionization") ? 2 : 1;
+        int shiftFactor = (collision->kind() == "ionization" && m_growth!="none") ? 2 : 1;
 
         for (size_t i = 0; i < m_points + 1; i++) {
             eps1[i] = clip(shiftFactor * m_gridEdge[i] + collision->threshold(),

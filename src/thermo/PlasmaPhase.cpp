@@ -468,6 +468,11 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
         } else if (m_distributionType == "Boltzmann-two-term") {
             m_eedfSolver = make_unique<EEDFTwoTermApproximation>(this);
 
+            if (eedf.hasKey("growth-model")){
+                string m_growth = eedf["growth-model"].asString();
+                m_eedfSolver->setGrowthModel(m_growth);
+            }
+
             bool enableEeCollisions = false;
             if (eedf.hasKey("electron-electron-collisions")) {
                 enableEeCollisions = eedf["electron-electron-collisions"].asBool();
