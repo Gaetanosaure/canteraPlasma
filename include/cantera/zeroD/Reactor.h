@@ -192,6 +192,9 @@ protected:
 
     //! Initial volume [m³]; used for steady-state calculations
     double m_initialVolume;
+
+    //! Intrinsic species source terms [kmol/m^3/s].
+    vector<double> m_intrinsicSpeciesSourceTerms;
 };
 }
 

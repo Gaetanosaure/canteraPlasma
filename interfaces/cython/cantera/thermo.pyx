@@ -1907,6 +1907,14 @@ cdef class ThermoPhase(_SolutionBase):
             raise TypeError('This method is invalid for '
                             f'thermo model: {self.thermo_model}.')
         self.plasma.forceMaxwellianRestart()
+    
+    def set_electron_number_density_target(self, double neTarget, double tau):
+        """Set the target electron number density [1/m^3] and relaxation time [s].
+
+        The target is used by PlasmaPhase intrinsic species source terms to relax
+        the electron density toward neTarget over the time scale tau.
+        """
+        self.thermo.setElectronNumberDensityTarget(neTarget, tau)
 
     property n_electron_energy_levels:
         """ Number of electron energy levels """

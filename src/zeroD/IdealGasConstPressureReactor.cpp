@@ -29,6 +29,7 @@ void IdealGasConstPressureReactor::initialize(double t0)
 {
     ConstPressureReactor::initialize(t0);
     m_hk.resize(m_nsp, 0.0);
+    m_intrinsicSpeciesSourceTerms.assign(m_nsp, 0.0);
 }
 
 void IdealGasConstPressureReactor::updateState(span<const double> y)
@@ -61,8 +62,30 @@ void IdealGasConstPressureReactor::eval(double time, span<double> LHS, span<doub
 
     m_thermo->getPartialMolarEnthalpies(m_hk);
 
+    // m_wdot is a persistent member vector. It must represent the current
+    // RHS evaluation only, so it has to be reset before adding chemistry or
+    // intrinsic source terms.
+    if (m_wdot.size() != m_nsp) {
+        m_wdot.assign(m_nsp, 0.0);
+    } else {
+        std::fill(m_wdot.begin(), m_wdot.end(), 0.0);
+    }
+
+    if (m_intrinsicSpeciesSourceTerms.size() != m_nsp) {
+        m_intrinsicSpeciesSourceTerms.assign(m_nsp, 0.0);
+    } else {
+        std::fill(m_intrinsicSpeciesSourceTerms.begin(),
+                  m_intrinsicSpeciesSourceTerms.end(), 0.0);
+    }
+
     if (m_chem) {
         m_kin->getNetProductionRates(m_wdot); // "omega dot"
+    }
+
+    m_thermo->getIntrinsicSpeciesSourceTerms(m_intrinsicSpeciesSourceTerms);
+
+    for (size_t n = 0; n < m_nsp; n++) {
+        m_wdot[n] += m_intrinsicSpeciesSourceTerms[n];
     }
 
     // external heat transfer

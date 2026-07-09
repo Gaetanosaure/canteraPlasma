@@ -175,6 +175,7 @@ cdef extern from "cantera/thermo/ThermoPhase.h" namespace "Cantera":
         double stoichAirFuelRatio(span[double] fuelComp, span[double] oxComp, ThermoBasis basis) except +translate_exception
 
         CxxAnyMap getAuxiliaryData() except +translate_exception
+        void setElectronNumberDensityTarget(double neTarget, double tau) except +translate_exception
 
 
 cdef extern from "cantera/thermo/SurfPhase.h":
@@ -217,6 +218,7 @@ cdef extern from "cantera/thermo/PlasmaPhase.h":
         double elasticPowerLoss() except +translate_exception
         double electronMobility()
         void forceMaxwellianRestart() except +translate_exception
+        void setElectronNumberDensityTarget(double neTarget, double tau)
 
 
 cdef extern from "cantera/cython/thermo_utils.h":

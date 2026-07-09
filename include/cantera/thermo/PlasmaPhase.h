@@ -393,9 +393,7 @@ public:
 
     //!Calculate the degree of ionization of the plasma.
     double ionDegree() const {
-       double ne = concentration(m_electronSpeciesIndex); // [kmol/m³]
-       double n_total = molarDensity();                   // [kmol/m³]
-       return ne / n_total;
+       return electronMolarConcentration() / molarDensity();
     }
 
 
@@ -498,6 +496,33 @@ public:
         }
         
     }
+
+    //! Electron number density [1/m^3] from the current phase state.
+    double electronNumberDensity() const {
+        return concentration(m_electronSpeciesIndex) * Avogadro;
+    }
+
+    //! Electron molar concentration [kmol/m^3] from the current phase state.
+    double electronMolarConcentration() const {
+        return concentration(m_electronSpeciesIndex);
+    }
+
+    //! Set the electron density target used by intrinsic species source terms.
+    void setElectronNumberDensityTarget(double neTarget, double tau) override;
+
+    //! Disable the electron density target source term.
+    void clearElectronNumberDensityTarget() override {
+        m_electronNumberDensityTarget = -1.0;
+        m_electronDensityRelaxationTime = 0.0;
+    }
+
+    //! Whether the electron density constraint source term is active.
+    bool electronNumberDensityTargetEnabled() const {
+        return m_electronNumberDensityTarget >= 0.0;
+    }
+
+    //! Intrinsic species source terms [kmol/m^3/s].
+    void getIntrinsicSpeciesSourceTerms(span<double> sdot) const override;
 
 protected:
     void updateThermo() const override;
@@ -677,6 +702,12 @@ private:
 
     //! The array containing the references of each electron collision.
     set<string> m_referencedElectronCollisions;
+
+    //! Target electron number density [1/m^3]; negative disables the constraint.
+    double m_electronNumberDensityTarget = -1.0;
+
+    //! Relaxation time for electron density imposition [s].
+    double m_electronDensityRelaxationTime = 0.0;
 
 };
 

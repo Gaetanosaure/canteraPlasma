@@ -1381,7 +1381,7 @@ double PlasmaPhase::jouleHeatingPower() const
     if (mu_e <= 0.0) {
         return 0.0;
     }
-    const double ne = concentration(m_electronSpeciesIndex) * Avogadro; // m^-3
+    const double ne = electronNumberDensity(); // m^-3 // m^-3
     if (ne <= 0.0) {
         return 0.0;
     }
@@ -1491,4 +1491,156 @@ void PlasmaPhase::checkVibrationalReservoirMoleFractions()
         }
     }
 }
+
+void PlasmaPhase::setElectronNumberDensityTarget(double neTarget, double tau)
+{
+    if (!std::isfinite(neTarget) || neTarget < 0.0) {
+        throw CanteraError("PlasmaPhase::setElectronNumberDensityTarget",
+            "Electron number density target must be finite and non-negative.");
+    }
+
+    if (!std::isfinite(tau) || tau <= 0.0) {
+        throw CanteraError("PlasmaPhase::setElectronNumberDensityTarget",
+            "Electron density relaxation time must be finite and positive.");
+    }
+
+    m_electronNumberDensityTarget = neTarget;
+    m_electronDensityRelaxationTime = tau;
+}
+
+void PlasmaPhase::getIntrinsicSpeciesSourceTerms(span<double> sdot) const
+{
+    checkArraySize("PlasmaPhase::getIntrinsicSpeciesSourceTerms",
+                   sdot.size(), nSpecies());
+
+    std::fill(sdot.begin(), sdot.end(), 0.0);
+
+    if (!electronNumberDensityTargetEnabled()) {
+        return;
+    }
+
+    const double tau = m_electronDensityRelaxationTime;
+    if (!std::isfinite(tau) || tau <= 0.0) {
+        throw CanteraError("PlasmaPhase::getIntrinsicSpeciesSourceTerms",
+            "Electron density relaxation time must be finite and positive.");
+    }
+
+    const double ceTarget = m_electronNumberDensityTarget / Avogadro; // kmol/m^3
+    const double ce = concentration(m_electronSpeciesIndex);          // kmol/m^3
+
+    // Electron source: relaxation toward the target concentration.
+    sdot[m_electronSpeciesIndex] = (ceTarget - ce) / tau;
+
+    double positiveIonCharge = 0.0; // kmol_charge/m^3
+    double negativeIonCharge = 0.0; // positive magnitude, kmol_charge/m^3
+
+    vector<size_t> positiveIons;
+    vector<size_t> neutralBases;
+    vector<double> seedWeights;
+
+    for (size_t k = 0; k < nSpecies(); k++) {
+        if (k == m_electronSpeciesIndex) {
+            continue;
+        }
+
+        const double z = charge(k);
+
+        if (z > 0.0) {
+            string neutralName = speciesName(k);
+
+            if (neutralName.empty() || neutralName.back() != '+') {
+                throw CanteraError("PlasmaPhase::getIntrinsicSpeciesSourceTerms",
+                    "Cannot infer neutral species from positive ion '{}'. "
+                    "Positive ion names must end with '+'.", neutralName);
+            }
+
+            while (!neutralName.empty() && neutralName.back() == '+') {
+                neutralName.pop_back();
+            }
+
+            const size_t kNeutral = speciesIndex(neutralName, false);
+            if (kNeutral == npos) {
+                throw CanteraError("PlasmaPhase::getIntrinsicSpeciesSourceTerms",
+                    "Positive ion '{}' implies neutral species '{}', which is "
+                    "not present in the phase.", speciesName(k), neutralName);
+            }
+
+            positiveIons.push_back(k);
+            neutralBases.push_back(kNeutral);
+
+            positiveIonCharge += z * concentration(k);
+
+            // If there are no positive ions yet, use the available neutral
+            // reservoirs to seed the distribution of positive ion production.
+            seedWeights.push_back(std::max(0.0, concentration(kNeutral)));
+
+        } else if (z < 0.0) {
+            // Negative ions are not imposed. They are treated as an existing
+            // negative charge reservoir that positive ions must balance.
+            negativeIonCharge += -z * concentration(k);
+        }
+    }
+
+    // Target positive charge density required for quasi-neutrality at ceTarget:
+    //
+    //     sum(z_i C_i)_positive = ceTarget + sum(|z_j| C_j)_negative
+    //
+    const double positiveIonChargeTarget = ceTarget + negativeIonCharge;
+
+    if (positiveIonChargeTarget <= 0.0) {
+        return;
+    }
+
+    if (positiveIons.empty()) {
+        throw CanteraError("PlasmaPhase::getIntrinsicSpeciesSourceTerms",
+            "Cannot impose electron density because the phase contains no "
+            "positive ion species.");
+    }
+
+    double seedWeightSum = 0.0;
+    for (double weight : seedWeights) {
+        seedWeightSum += weight;
+    }
+
+    if (positiveIonCharge <= 0.0 && seedWeightSum <= 0.0) {
+        throw CanteraError("PlasmaPhase::getIntrinsicSpeciesSourceTerms",
+            "Cannot impose electron density because all positive ions and their "
+            "neutral base species have zero concentration.");
+    }
+
+    for (size_t i = 0; i < positiveIons.size(); i++) {
+        const size_t kIon = positiveIons[i];
+        const size_t kNeutral = neutralBases[i];
+        const double z = charge(kIon);
+
+        double chargeFraction = 0.0;
+
+        if (positiveIonCharge > 0.0) {
+            // Preserve the current positive-ion charge distribution.
+            chargeFraction = z * concentration(kIon) / positiveIonCharge;
+        } else {
+            // If no positive ion exists yet, seed ion production according to
+            // the corresponding neutral base species abundances.
+            chargeFraction = seedWeights[i] / seedWeightSum;
+        }
+
+        const double cIonTarget =
+            chargeFraction * positiveIonChargeTarget / z;
+
+        const double cIon = concentration(kIon);
+
+        // Positive ion source: relaxation toward its target concentration.
+        const double source = (cIonTarget - cIon) / tau;
+
+        sdot[kIon] += source;
+
+        // Automatic neutral compensation:
+        //
+        //     A -> A+ + Electron
+        //
+        // Increasing A+ consumes A. Decreasing A+ restores A.
+        sdot[kNeutral] -= source;
+    }
+}
+
 }

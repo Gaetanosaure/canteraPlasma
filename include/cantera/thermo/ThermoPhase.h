@@ -1175,6 +1175,23 @@ public:
         return 0.0;
     }
 
+    //! Intrinsic species source terms [kmol/m^3/s].
+    virtual void getIntrinsicSpeciesSourceTerms(span<double> sdot) const {
+        std::fill(sdot.begin(), sdot.end(), 0.0);
+    }
+
+    //! Set target electron number density [1/m^3] for intrinsic species sources.
+    virtual void setElectronNumberDensityTarget(double neTarget, double tau) {
+        throw NotImplementedError("ThermoPhase::setElectronNumberDensityTarget",
+            "Electron density target is only implemented for plasma phases.");
+    }
+
+    //! Disable target electron number density source.
+    virtual void clearElectronNumberDensityTarget() {
+        throw NotImplementedError("ThermoPhase::clearElectronNumberDensityTarget",
+            "Electron density target is only implemented for plasma phases.");
+    }
+
     // The methods below are not virtual, and should not be overloaded.
 
     //! @}
