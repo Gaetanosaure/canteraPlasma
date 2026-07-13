@@ -77,14 +77,28 @@ TwoTempPlasmaRate::TwoTempPlasmaRate(const AnyMap& node, const UnitStack& rate_u
     } else if (node.hasKey("b_gas")) {
         m_bg = node["b_gas"].asDouble();
     }
+
+    if (node.hasKey("T-inv")) {
+        m_Tinv = node.convert("T-inv", "K");
+    } else if (node.hasKey("T_inv")) {
+        m_Tinv = node.convert("T_inv", "K");
+    }
 }
 
 double TwoTempPlasmaRate::ddTScaledFromStruct(const TwoTempPlasmaData& shared_data) const
 {
     warn_user("TwoTempPlasmaRate::ddTScaledFromStruct",
         "Temperature derivative does not consider changes of electron temperature.");
-        return m_bg * shared_data.recipT
-           + (m_Ea_R - m_E4_R) * shared_data.recipT * shared_data.recipT;
+
+    double derivative = m_bg * shared_data.recipT
+                      + (m_Ea_R - m_E4_R)
+                            * shared_data.recipT * shared_data.recipT;
+
+    if (m_Tinv != 0.0) {
+        derivative += -1.0 / m_Tinv;
+    }
+
+    return derivative;
 }
 
 void TwoTempPlasmaRate::setContext(const Reaction& rxn, const Kinetics& kin)

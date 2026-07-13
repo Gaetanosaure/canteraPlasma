@@ -94,10 +94,17 @@ public:
      *  @param shared_data  data shared by all reactions of a given type
      */
     double evalFromStruct(const TwoTempPlasmaData& shared_data) const {
-        // m_E4_R is the electron activation (in temperature units)
-            return m_A * std::exp(m_bg * shared_data.logT + m_b * shared_data.logTe
-                    - m_Ea_R * shared_data.recipT + m_E4_R * (shared_data.electronTemp - shared_data.temperature)
-                    * shared_data.recipTe * shared_data.recipT);
+        double logRate = m_bg * shared_data.logT
+                    + m_b * shared_data.logTe
+                    - m_Ea_R * shared_data.recipT
+                    + m_E4_R * (shared_data.electronTemp - shared_data.temperature)
+                            * shared_data.recipTe * shared_data.recipT;
+
+        if (m_Tinv != 0.0) {
+            logRate += -shared_data.temperature / m_Tinv;
+        }
+
+        return m_A * std::exp(logRate);
     }
 
 
@@ -117,6 +124,7 @@ public:
 
 protected:
     double m_bg = 0.0; //!< Gas temperature exponent
+    double m_Tinv = 0.0; //!< Temperature scale for exp(-Tgas / T-inv)
 };
 
 }
