@@ -479,7 +479,7 @@ public:
 
     // Thresholds for identifying vibrational reservoir species based on their mole fractions
     double m_vibrationalMoleFractionThreshold = 1e-2;
-    double m_vibrationalAbsoluteMoleFractionThreshold = 1e-20;
+    double m_vibrationalAbsoluteMoleFractionThreshold = 1e-10;
 
     //! Update the list of vibrational reservoir / fictive species
     void updateVibrationalReservoirSpecies();
