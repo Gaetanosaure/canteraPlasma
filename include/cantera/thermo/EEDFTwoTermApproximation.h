@@ -643,6 +643,9 @@ protected:
 
     bool m_forceMaxwellianRestart = false;
 
+    bool m_warning_negative_CS = true; // initialise this as true so that the first time cs are loaded the warning prints
+    // but avoids spamming the user.
+
 }; // end of class EEDFTwoTermApproximation
 
 } // end of namespace Cantera

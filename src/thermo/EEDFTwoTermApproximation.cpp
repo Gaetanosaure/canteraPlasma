@@ -1999,10 +1999,11 @@ void EEDFTwoTermApproximation::calculateTotalElasticCrossSection()
                     } else {
                         const std::string& effectiveKind = m_phase->collisionRate(k)->kind();
                         std::string effectiveTarget = m_phase->speciesName(m_phase->targetIndex(k));
-
-                        writelog("Warning: reconstructed elastic cross section is negative "
-                                "for collision {} kind {} target {} at energy {}: {}\n",
-                                k, effectiveKind, effectiveTarget, x[i], y_elastic[i]);
+                        if (m_warning_negative_CS){
+                            writelog("Warning: reconstructed elastic cross section is negative "
+                                    "for collision {} kind {} target {} at energy {}: {}\n",
+                                    k, effectiveKind, effectiveTarget, x[i], y_elastic[i]);
+                        }
                         y_elastic[i] = 0.0;
                     }
                 }
@@ -2014,6 +2015,7 @@ void EEDFTwoTermApproximation::calculateTotalElasticCrossSection()
                                  linearInterp(m_gridEdge[i], x, y_elastic);
         }
     }
+    m_warning_negative_CS = false;
 }
 
 double EEDFTwoTermApproximation::linearInterpBounded(double x,
