@@ -67,21 +67,48 @@ TwoTempPlasmaRate::TwoTempPlasmaRate(double A, double b, double Ea, double EE, d
     m_bg = bg;
 }
 
-TwoTempPlasmaRate::TwoTempPlasmaRate(const AnyMap& node, const UnitStack& rate_units)
+// TwoTempPlasmaRate::TwoTempPlasmaRate(const AnyMap& node, const UnitStack& rate_units)
+//     : TwoTempPlasmaRate()
+// {
+//     setParameters(node, rate_units);
+
+//     if (node.hasKey("b-gas")) {
+//         m_bg = node["b-gas"].asDouble();
+//     } else if (node.hasKey("b_gas")) {
+//         m_bg = node["b_gas"].asDouble();
+//     }
+
+//     if (node.hasKey("T-inv")) {
+//         m_Tinv = node.convert("T-inv", "K");
+//     } else if (node.hasKey("T_inv")) {
+//         m_Tinv = node.convert("T_inv", "K");
+//     }
+// }
+
+TwoTempPlasmaRate::TwoTempPlasmaRate(
+    const AnyMap& node, const UnitStack& rate_units)
     : TwoTempPlasmaRate()
 {
     setParameters(node, rate_units);
 
-    if (node.hasKey("b-gas")) {
-        m_bg = node["b-gas"].asDouble();
-    } else if (node.hasKey("b_gas")) {
-        m_bg = node["b_gas"].asDouble();
+    // An empty rate is allowed for deferred construction.
+    if (!node.hasKey("rate-constant")) {
+        return;
     }
 
-    if (node.hasKey("T-inv")) {
-        m_Tinv = node.convert("T-inv", "K");
-    } else if (node.hasKey("T_inv")) {
-        m_Tinv = node.convert("T_inv", "K");
+    const auto& rateNode =
+        node["rate-constant"].as<AnyMap>();
+
+    if (rateNode.hasKey("b-gas")) {
+        m_bg = rateNode["b-gas"].asDouble();
+    } else if (rateNode.hasKey("b_gas")) {
+        m_bg = rateNode["b_gas"].asDouble();
+    }
+
+    if (rateNode.hasKey("T-inv")) {
+        m_Tinv = rateNode.convert("T-inv", "K");
+    } else if (rateNode.hasKey("T_inv")) {
+        m_Tinv = rateNode.convert("T_inv", "K");
     }
 }
 
