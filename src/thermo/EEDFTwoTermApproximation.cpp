@@ -1959,62 +1959,156 @@ double EEDFTwoTermApproximation::superElasticCrossSection(size_t k, double eps)
     return sigmaSE;
 }
 
-// new implementation of the function proposed by nicolas
+// // new implementation of the function proposed by nicolas
+// // implementation 1 faite par moi, avec une potentielle reconstruction fausse
+// // A cause d'une mauvaise interpolation
+// void EEDFTwoTermApproximation::calculateTotalElasticCrossSection()
+// {
+//     m_sigmaElastic.clear();
+//     m_sigmaElastic.resize(m_points, 0.0);
+//     for (size_t k : m_phase->kElastic()) {
+
+//         // writelog("Enter with an elastic cs\n");
+//         auto x = m_phase->collisionRate(k)->energyLevels();
+//         auto y = m_phase->collisionRate(k)->crossSections();
+//         vector<double> y_elastic(y.data(), y.data() + y.size());
+
+//         // Note:
+//         // moleFraction(m_kTargets[k]) <=> m_X_targets[m_klocTargets[k]]
+//         double mass_ratio = ElectronMass / (m_phase->molecularWeight(m_kTargets[k]) / Avogadro);
+
+//         if (m_phase->collisionRate(k)->kind()=="effective") {
+
+//             // writelog("Enter with an elastic cs that is actually an effective\n");
+
+//             for (size_t ki : m_phase->kInelastic())
+//             {
+//                 if(m_phase->targetIndex(ki) == m_phase->targetIndex(k)){
+//                     // writelog("loop over inelastic processes: process {}\n", ki);
+//                     auto xi = m_phase->collisionRate(ki)->energyLevels();
+//                     auto yi = m_phase->collisionRate(ki)->crossSections();
+//                     for (size_t i = 0; i < x.size(); i++)
+//                     {
+//                         y_elastic[i] -= linearInterpCrossSectionZeroOutside(x[i], xi, yi);
+//                     }
+//                 }
+//             }
+//             // check that the reconstructed elastic cross section is non-negative.
+//             for (size_t i = 0; i < y_elastic.size(); i++) {
+//                 if (y_elastic[i] < 0.0) {
+//                     if (y_elastic[i] > -1e-30) {
+//                         // y_elastic[i] = 0.0;
+//                     } else {
+//                         const std::string& effectiveKind = m_phase->collisionRate(k)->kind();
+//                         std::string effectiveTarget = m_phase->speciesName(m_phase->targetIndex(k));
+//                         if (m_warning_negative_CS){
+//                             writelog("Warning: reconstructed elastic cross section is negative "
+//                                     "for collision {} kind {} target {} at energy {}: {}\n",
+//                                     k, effectiveKind, effectiveTarget, x[i], y_elastic[i]);
+//                         }
+//                         // y_elastic[i] = 0.0;
+//                     }
+//                 }
+//             }
+//         }
+
+//         for (size_t i = 0; i < m_points; i++) {
+//             m_sigmaElastic[i] += 2.0 * mass_ratio * m_X_targets[m_klocTargets[k]] *
+//                                  linearInterp(m_gridEdge[i], x, y_elastic);
+//         }
+//     }
+//     m_warning_negative_CS = false;
+// }
+
+// Nouvelle interpolation en théorie plus juste
 void EEDFTwoTermApproximation::calculateTotalElasticCrossSection()
 {
     m_sigmaElastic.clear();
     m_sigmaElastic.resize(m_points, 0.0);
+
     for (size_t k : m_phase->kElastic()) {
 
-        // writelog("Enter with an elastic cs\n");
-        auto x = m_phase->collisionRate(k)->energyLevels();
-        auto y = m_phase->collisionRate(k)->crossSections();
-        vector<double> y_elastic(y.data(), y.data() + y.size());
+        auto rate = m_phase->collisionRate(k);
 
-        // Note:
-        // moleFraction(m_kTargets[k]) <=> m_X_targets[m_klocTargets[k]]
-        double mass_ratio = ElectronMass / (m_phase->molecularWeight(m_kTargets[k]) / Avogadro);
+        auto x = rate->energyLevels();
+        auto y = rate->crossSections();
 
-        if (m_phase->collisionRate(k)->kind()=="effective") {
+        const size_t target = m_phase->targetIndex(k);
 
-            // writelog("Enter with an elastic cs that is actually an effective\n");
+        // Electron / target mass ratio
+        double mass_ratio =
+            ElectronMass
+            / (m_phase->molecularWeight(m_kTargets[k]) / Avogadro);
 
-            for (size_t ki : m_phase->kInelastic())
-            {
-                if(m_phase->targetIndex(ki) == m_phase->targetIndex(k)){
-                    // writelog("loop over inelastic processes: process {}\n", ki);
-                    auto xi = m_phase->collisionRate(ki)->energyLevels();
-                    auto yi = m_phase->collisionRate(ki)->crossSections();
-                    for (size_t i = 0; i < x.size(); i++)
-                    {
-                        y_elastic[i] -= linearInterpCrossSectionZeroOutside(x[i], xi, yi);
-                    }
-                }
-            }
-            // check that the reconstructed elastic cross section is non-negative.
-            for (size_t i = 0; i < y_elastic.size(); i++) {
-                if (y_elastic[i] < 0.0) {
-                    if (y_elastic[i] > -1e-30) {
-                        y_elastic[i] = 0.0;
-                    } else {
-                        const std::string& effectiveKind = m_phase->collisionRate(k)->kind();
-                        std::string effectiveTarget = m_phase->speciesName(m_phase->targetIndex(k));
-                        if (m_warning_negative_CS){
-                            writelog("Warning: reconstructed elastic cross section is negative "
-                                    "for collision {} kind {} target {} at energy {}: {}\n",
-                                    k, effectiveKind, effectiveTarget, x[i], y_elastic[i]);
-                        }
-                        y_elastic[i] = 0.0;
-                    }
-                }
-            }
-        }
+        const double prefactor =
+            2.0 * mass_ratio * m_X_targets[m_klocTargets[k]];
 
+        // Reconstruct directly on the EEDF grid.
         for (size_t i = 0; i < m_points; i++) {
-            m_sigmaElastic[i] += 2.0 * mass_ratio * m_X_targets[m_klocTargets[k]] *
-                                 linearInterp(m_gridEdge[i], x, y_elastic);
+
+            const double eps = m_gridEdge[i];
+
+            // Use the original elastic/effective CS directly at the
+            // energy where the solver needs it.
+            //
+            // Keep linearInterp() here so that the interpolation of the
+            // effective CS is identical to that used in
+            // calculateTotalCrossSection().
+            double sigma_elastic = linearInterp(eps, x, y);
+
+            if (rate->kind() == "effective") {
+
+                // effective = elastic momentum-transfer
+                //           + sum of forward inelastic cross sections
+                //
+                // Therefore:
+                //
+                // elastic = effective - sum(inelastic)
+                //
+                // IMPORTANT:
+                // Every inelastic cross section is interpolated directly
+                // at eps. We do NOT first project the inelastic CS onto
+                // the effective-CS grid.
+                for (size_t ki : m_phase->kInelastic()) {
+
+                    if (m_phase->targetIndex(ki) != target) {
+                        continue;
+                    }
+
+                    auto rate_i = m_phase->collisionRate(ki);
+
+                    auto xi = rate_i->energyLevels();
+                    auto yi = rate_i->crossSections();
+
+                    sigma_elastic -=
+                        linearInterpCrossSectionZeroOutside(
+                            eps, xi, yi);
+                }
+
+                // Diagnostic only.
+                // Do NOT clip negative reconstructed cross sections.
+                if (sigma_elastic < -1e-30 && m_warning_negative_CS) {
+
+                    const std::string& effectiveKind = rate->kind();
+
+                    std::string effectiveTarget =
+                        m_phase->speciesName(target);
+
+                    writelog(
+                        "Warning: reconstructed elastic cross section is negative "
+                        "for collision {} kind {} target {} at energy {}: {}\n",
+                        k,
+                        effectiveKind,
+                        effectiveTarget,
+                        eps,
+                        sigma_elastic);
+                }
+            }
+
+            m_sigmaElastic[i] += prefactor * sigma_elastic;
         }
     }
+
     m_warning_negative_CS = false;
 }
 
