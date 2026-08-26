@@ -1494,15 +1494,15 @@ void PlasmaPhase::checkVibrationalReservoirMoleFractions()
 
 void PlasmaPhase::setElectronNumberDensityTarget(double neTarget, double tau)
 {
-    if (!std::isfinite(neTarget) || neTarget < 0.0) {
-        throw CanteraError("PlasmaPhase::setElectronNumberDensityTarget",
-            "Electron number density target must be finite and non-negative.");
-    }
+    // if (!std::isfinite(neTarget) || neTarget < 0.0) {
+    //     throw CanteraError("PlasmaPhase::setElectronNumberDensityTarget",
+    //         "Electron number density target must be finite and non-negative.");
+    // }
 
-    if (!std::isfinite(tau) || tau <= 0.0) {
-        throw CanteraError("PlasmaPhase::setElectronNumberDensityTarget",
-            "Electron density relaxation time must be finite and positive.");
-    }
+    // if (!std::isfinite(tau) || tau <= 0.0) {
+    //     throw CanteraError("PlasmaPhase::setElectronNumberDensityTarget",
+    //         "Electron density relaxation time must be finite and positive.");
+    // }
 
     m_electronNumberDensityTarget = neTarget;
     m_electronDensityRelaxationTime = tau;
