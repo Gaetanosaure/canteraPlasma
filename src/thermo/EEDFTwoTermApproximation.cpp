@@ -468,7 +468,7 @@ int EEDFTwoTermApproximation::calculateDistributionFunction()
                                 "Unknown EEDF first guess '{}'.", m_firstguess);
                         }
                     } else {
-                        writelog("Hey! Maxwellian reset is off!\n");
+                        // writelog("Hey! Maxwellian reset is off!\n");
                         projectPreviousEEDFOnCurrentGrid(oldGridCenter, oldF0);
                     }
 
@@ -492,7 +492,7 @@ int EEDFTwoTermApproximation::calculateDistributionFunction()
                                 "Unknown EEDF first guess '{}'.", m_firstguess);
                         }
                     } else {
-                        writelog("Hey! Maxwellian reset is off!\n");
+                        // writelog("Hey! Maxwellian reset is off!\n");
                         projectPreviousEEDFOnCurrentGrid(oldGridCenter, oldF0);
                     }
 
