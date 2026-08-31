@@ -1828,14 +1828,27 @@ void EEDFTwoTermApproximation::calculateTotalCrossSection()
 
         const double X_target = m_X_targets[m_klocTargets[k]];
 
+    // ancienne version du code au 16/08/2026
+    //     for (size_t i = 0; i < m_points; i++) {
+    //         m_totalCrossSectionCenter[i] += X_target *
+    //                                         linearInterp(m_gridCenter[i], x, y);
+    //     }
+
+    //     for (size_t i = 0; i < m_points + 1; i++) {
+    //         m_totalCrossSectionEdge[i] += X_target *
+    //                                       linearInterp(m_gridEdge[i], x, y);
+    //     }
+    // }
+
+    // nouvelle version avec l'interpolation plus poussée
         for (size_t i = 0; i < m_points; i++) {
             m_totalCrossSectionCenter[i] += X_target *
-                                            linearInterp(m_gridCenter[i], x, y);
+                                            linearInterpCrossSectionZeroOutside(m_gridCenter[i], x, y);
         }
 
         for (size_t i = 0; i < m_points + 1; i++) {
             m_totalCrossSectionEdge[i] += X_target *
-                                          linearInterp(m_gridEdge[i], x, y);
+                                          linearInterpCrossSectionZeroOutside(m_gridEdge[i], x, y);
         }
     }
 
@@ -2051,10 +2064,10 @@ void EEDFTwoTermApproximation::calculateTotalElasticCrossSection()
             // Use the original elastic/effective CS directly at the
             // energy where the solver needs it.
             //
-            // Keep linearInterp() here so that the interpolation of the
+            // Keep linearInterp() or linearInterpCrossSectionZeroOutside() here so that the interpolation of the
             // effective CS is identical to that used in
             // calculateTotalCrossSection().
-            double sigma_elastic = linearInterp(eps, x, y);
+            double sigma_elastic = linearInterpCrossSectionZeroOutside(eps, x, y);
 
             if (rate->kind() == "effective") {
 
