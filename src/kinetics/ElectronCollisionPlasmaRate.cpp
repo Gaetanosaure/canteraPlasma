@@ -41,34 +41,49 @@ ElectronCollisionPlasmaData::ElectronCollisionPlasmaData()
     distribution.assign(1, 0.0);
 }
 
-bool ElectronCollisionPlasmaData::update(const ThermoPhase& phase, const Kinetics& kin)
+bool ElectronCollisionPlasmaData::update(
+    const ThermoPhase& phase,
+    const Kinetics& kin)
 {
     auto& pp = const_cast<PlasmaPhase&>(
         dynamic_cast<const PlasmaPhase&>(phase));
 
-    // Keep the EEDF synchronized "lazily" when electron-collision rates are updated.
-    // The Boltzmann solver itself decides whether the current gas density,
-    // temperature, reduced electric field, and target mole fractions require a
-    // new EEDF calculation.
     if (pp.electronEnergyDistributionType() == "Boltzmann-two-term") {
         pp.updateElectronEnergyDistribution();
     }
 
-    // The distribution number dictates whether the rate should be updated.
-    // Three scenarios involving changes of the distribution number:
-    // 1. Change of the electron energy levels
-    // 2. Change of the electron energy distribution
-    // 3. Combined changes of one and two
-    if (pp.distributionNumber() == m_dist_number) {
-        return false;
+    // Total number density in molecules/m^3
+    const double currentNumberDensity =
+        pp.molarDensity() * Avogadro;
+
+    if (!std::isfinite(currentNumberDensity)
+        || currentNumberDensity <= 0.0) {
+        throw CanteraError(
+            "ElectronCollisionPlasmaData::update",
+            "Total gas number density must be finite and positive. "
+            "Current value is {} molecules/m^3.",
+            currentNumberDensity);
     }
 
-    // Update the cached EEDF from the plasma phase.
+    // A density-dependent electron-collision rate must be recalculated even
+    // when the EEDF itself has not changed.
+    const bool numberDensityChanged =
+        currentNumberDensity != numberDensity;
+
+    numberDensity = currentNumberDensity;
+
+    const bool distributionChanged =
+        pp.distributionNumber() != m_dist_number;
+
+    if (!distributionChanged) {
+        return numberDensityChanged;
+    }
+
     m_dist_number = pp.distributionNumber();
+
     distribution.resize(pp.nElectronEnergyLevels());
     pp.getElectronEnergyDistribution(distribution);
 
-    // Update the cached energy grid only when the phase grid revision changes.
     if (pp.levelNumber() != levelNumber || energyLevels.empty()) {
         levelNumber = pp.levelNumber();
         energyLevels.resize(pp.nElectronEnergyLevels());
@@ -151,39 +166,80 @@ void ElectronCollisionPlasmaRate::updateInterpolatedCrossSection(
 double ElectronCollisionPlasmaRate::evalFromStruct(
     const ElectronCollisionPlasmaData& shared_data)
 {
-    // Interpolate cross-sections data to the energy levels of
-    // the electron energy distribution function when the EEDF from the phase changes
+    // Interpolate cross sections when the electron-energy grid changes.
     if (m_levelNumber != shared_data.levelNumber) {
         m_crossSectionsInterpolated.clear();
+        m_crossSectionsInterpolated.reserve(
+            shared_data.energyLevels.size());
+
         for (double level : shared_data.energyLevels) {
             m_crossSectionsInterpolated.push_back(
-            interpolateCrossSection(level, m_energyLevels, m_crossSections));
+                linearInterp(
+                    level,
+                    m_energyLevels,
+                    m_crossSections));
         }
+
         m_levelNumber = shared_data.levelNumber;
     }
 
-    AssertThrowMsg(m_crossSectionsInterpolated.size() == shared_data.distribution.size(),
-        "ECPR:evalFromStruct", "Size mismatch: len(interp) = {}, len(distrib) = {}",
-        m_crossSectionsInterpolated.size(), shared_data.distribution.size());
+    AssertThrowMsg(
+        m_crossSectionsInterpolated.size()
+            == shared_data.distribution.size(),
+        "ElectronCollisionPlasmaRate::evalFromStruct",
+        "Size mismatch: len(interp) = {}, len(distribution) = {}",
+        m_crossSectionsInterpolated.size(),
+        shared_data.distribution.size());
 
-    // Map cross sections to Eigen::ArrayXd
-    auto cs_array = Eigen::Map<const Eigen::ArrayXd>(
-        m_crossSectionsInterpolated.data(), m_crossSectionsInterpolated.size()
-    );
+    auto crossSections = Eigen::Map<const Eigen::ArrayXd>(
+        m_crossSectionsInterpolated.data(),
+        m_crossSectionsInterpolated.size());
 
-    // Map energyLevels in Eigen::ArrayXd
-    auto eps = Eigen::Map<const Eigen::ArrayXd>(
-        shared_data.energyLevels.data(), shared_data.energyLevels.size()
-    );
+    auto energy = Eigen::Map<const Eigen::ArrayXd>(
+        shared_data.energyLevels.data(),
+        shared_data.energyLevels.size());
 
-    // Map energyLevels in Eigen::ArrayXd
     auto distribution = Eigen::Map<const Eigen::ArrayXd>(
-        shared_data.distribution.data(), shared_data.distribution.size()
-    );
+        shared_data.distribution.data(),
+        shared_data.distribution.size());
 
-    // unit in kmol/m3/s
-    return pow(2.0 * ElectronCharge / ElectronMass, 0.5) * Avogadro *
-           simpson(eps.cwiseProduct(distribution.cwiseProduct(cs_array)), eps);
+    // Standard binary electron-collision coefficient [m^3/kmol/s]
+    double kf =
+        std::sqrt(2.0 * ElectronCharge / ElectronMass)
+        * Avogadro
+        * simpson(
+            energy.cwiseProduct(
+                distribution.cwiseProduct(crossSections)),
+            energy);
+
+    // Special density-dependent attachment:
+    //
+    //     Electron + O2 + M -> O2- + M
+    //
+    // The cross-section table is understood to contain the generalized
+    // three-body attachment data. The third body is folded into the effective
+    // bimolecular coefficient using the total density in molecules/cm^3.
+    const bool isO2ThreeBodyAttachment =
+        m_kind == "attachment"
+        && m_target == "O2"
+        && (m_product == "O2^-" || m_product == "O2-");
+
+    if (isO2ThreeBodyAttachment) {
+        const double numberDensityCm3 =
+            shared_data.numberDensity * 1.0e-6;
+
+        kf *= numberDensityCm3;
+    }
+
+    if (!std::isfinite(kf) || kf < 0.0) {
+        throw CanteraError(
+            "ElectronCollisionPlasmaRate::evalFromStruct",
+            "Invalid electron-collision rate coefficient for collision '{}': {}.",
+            m_collisionName,
+            kf);
+    }
+
+    return kf;
 }
 
 void ElectronCollisionPlasmaRate::modifyRateConstants(

@@ -24,24 +24,30 @@ struct ElectronCollisionPlasmaData : public ReactionData
 {
     ElectronCollisionPlasmaData();
 
-    virtual bool update(const ThermoPhase& phase, const Kinetics& kin) override;
+    virtual bool update(
+        const ThermoPhase& phase,
+        const Kinetics& kin) override;
+
     using ReactionData::update;
 
-    virtual void invalidateCache() override {
+    virtual void invalidateCache() override
+    {
         ReactionData::invalidateCache();
         energyLevels.resize(0);
         distribution.resize(0);
         m_dist_number = -1;
+        numberDensity = NAN;
     }
 
-    vector<double> energyLevels; //!< electron energy levels
-    vector<double> distribution; //!< electron energy distribution
+    vector<double> energyLevels;
+    vector<double> distribution;
 
-    //! integer that is incremented when electron energy levels change
+    //! Total gas number density [molecules/m^3]
+    double numberDensity = NAN;
+
     int levelNumber = -1;
 
 protected:
-    //! integer that is incremented when electron energy distribution changes
     int m_dist_number = -1;
 };
 
