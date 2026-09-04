@@ -321,6 +321,12 @@ void EEDFTwoTermApproximation::storeCurrentParamsForEEDF()
 
     m_X_targets_prev = m_X_targets;
     m_X_superElasticSources_prev = m_X_superElasticSources;
+
+    // These values must represent the state of the last computed EEDF,
+    // rather than the state of the previous call to setupEeCol().
+    m_ionDegree_tmp = m_ionDegree;
+    m_nElectron_tmp = m_nElectron;
+
     m_f0_ok = true;
 }
 
@@ -2616,6 +2622,20 @@ void EEDFTwoTermApproximation::setEEDFRecalculationTolerances(
 void EEDFTwoTermApproximation::setupEeCol(const double ionDegree,
                                           const double nElectron)
 {
+
+    // When electron-electron collisions are disabled, the EEDF does not
+    // depend on either the ionization degree or the electron density.
+    // Reactor integrators may temporarily propose tiny negative electron
+    // concentrations when the physical concentration approaches zero.
+    if (!m_enableEeCollisions) {
+        m_eeCol = false;
+        m_ionDegree = 0.0;
+        m_nElectron = 0.0;
+        m_ionDegree_tmp = 0.0;
+        m_nElectron_tmp = 0.0;
+        return;
+    }
+
     if (!std::isfinite(ionDegree) || ionDegree < 0.0) {
         throw CanteraError("EEDFTwoTermApproximation::setupEeCol",
             "Ionization degree must be finite and non-negative.");
@@ -2657,9 +2677,6 @@ void EEDFTwoTermApproximation::setupEeCol(const double ionDegree,
     if (needRecompute) {
         m_f0_ok = false;
     }
-
-    m_ionDegree_tmp = m_ionDegree;
-    m_nElectron_tmp = m_nElectron;
 }
 void EEDFTwoTermApproximation::enableElectronElectronCollisions(bool enable)
 {

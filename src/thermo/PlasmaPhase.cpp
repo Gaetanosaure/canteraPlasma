@@ -131,6 +131,10 @@ void PlasmaPhase::updateElectronEnergyDistribution()
         );
 
         if (validEEDF) {
+            // The solver normalizes the EEDF at cell centers, whereas PlasmaPhase
+            // stores values interpolated at cell edges. Renormalize this representation
+            // before using it for Te or reaction-rate integration.
+            normalizeElectronEnergyDistribution();
             updateElectronTemperatureFromEnergyDist();
         } else {
             // Keep the previous electron temperature if the solver did not return a usable
@@ -362,25 +366,77 @@ void PlasmaPhase::setDiscretizedElectronEnergyDist(span<const double> levels,
     electronEnergyDistributionChanged();
 }
 
+// old version of the function
+// void PlasmaPhase::updateElectronTemperatureFromEnergyDist()
+// {
+//     // calculate mean electron energy and electron temperature
+//     Eigen::ArrayXd eps52 = m_electronEnergyLevels.pow(5./2.);
+//     double epsilon_m = 2.0 / 5.0 * numericalQuadrature(m_quadratureMethod,
+//                                                        m_electronEnergyDist, eps52);
+//     if (epsilon_m < 0.0 && m_quadratureMethod == "simpson") {
+//         // try trapezoidal method
+//         epsilon_m = 2.0 / 5.0 * numericalQuadrature(
+//             "trapezoidal", m_electronEnergyDist, eps52);
+//     }
+
+//     if (!std::isfinite(epsilon_m) || epsilon_m <= 0.0) {
+//         throw CanteraError("PlasmaPhase::updateElectronTemperatureFromEnergyDist",
+//             "The electron energy distribution produces an invalid mean electron energy: {}.",
+//             epsilon_m);
+//     }
+
+//     m_electronTemp = 2.0 / 3.0 * epsilon_m * ElectronCharge / Boltzmann;
+// }
+
+//new version of the function
 void PlasmaPhase::updateElectronTemperatureFromEnergyDist()
 {
-    // calculate mean electron energy and electron temperature
-    Eigen::ArrayXd eps52 = m_electronEnergyLevels.pow(5./2.);
-    double epsilon_m = 2.0 / 5.0 * numericalQuadrature(m_quadratureMethod,
-                                                       m_electronEnergyDist, eps52);
-    if (epsilon_m < 0.0 && m_quadratureMethod == "simpson") {
-        // try trapezoidal method
-        epsilon_m = 2.0 / 5.0 * numericalQuadrature(
+    // Normalization:
+    // integral sqrt(epsilon) F(epsilon) d epsilon
+    Eigen::ArrayXd eps32 = m_electronEnergyLevels.pow(3.0 / 2.0);
+
+    // First energy moment:
+    // integral epsilon^(3/2) F(epsilon) d epsilon
+    Eigen::ArrayXd eps52 = m_electronEnergyLevels.pow(5.0 / 2.0);
+
+    double norm = 2.0 / 3.0 * numericalQuadrature(
+        m_quadratureMethod, m_electronEnergyDist, eps32);
+
+    double energyMoment = 2.0 / 5.0 * numericalQuadrature(
+        m_quadratureMethod, m_electronEnergyDist, eps52);
+
+    // Simpson's rule may occasionally produce an invalid result on a strongly
+    // non-uniform or insufficiently resolved grid. Retry both integrals using
+    // the trapezoidal rule so they remain mutually consistent.
+    if ((!std::isfinite(norm) || norm <= 0.0 ||
+         !std::isfinite(energyMoment) || energyMoment <= 0.0) &&
+        m_quadratureMethod == "simpson") {
+
+        norm = 2.0 / 3.0 * numericalQuadrature(
+            "trapezoidal", m_electronEnergyDist, eps32);
+
+        energyMoment = 2.0 / 5.0 * numericalQuadrature(
             "trapezoidal", m_electronEnergyDist, eps52);
     }
 
-    if (!std::isfinite(epsilon_m) || epsilon_m <= 0.0) {
-        throw CanteraError("PlasmaPhase::updateElectronTemperatureFromEnergyDist",
-            "The electron energy distribution produces an invalid mean electron energy: {}.",
-            epsilon_m);
+    if (!std::isfinite(norm) || norm <= 0.0) {
+        throw CanteraError(
+            "PlasmaPhase::updateElectronTemperatureFromEnergyDist",
+            "The electron energy distribution has an invalid norm: {}.",
+            norm);
     }
 
-    m_electronTemp = 2.0 / 3.0 * epsilon_m * ElectronCharge / Boltzmann;
+    if (!std::isfinite(energyMoment) || energyMoment <= 0.0) {
+        throw CanteraError(
+            "PlasmaPhase::updateElectronTemperatureFromEnergyDist",
+            "The electron energy distribution has an invalid energy moment: {}.",
+            energyMoment);
+    }
+
+    const double meanEnergy = energyMoment / norm; // [eV]
+
+    m_electronTemp =
+        2.0 / 3.0 * meanEnergy * ElectronCharge / Boltzmann;
 }
 
 void PlasmaPhase::setIsotropicShapeFactor(double x)

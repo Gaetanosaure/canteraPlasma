@@ -12,6 +12,29 @@
 namespace Cantera
 {
 
+namespace
+{
+
+double interpolateCrossSection(
+    double energy,
+    const vector<double>& energyLevels,
+    const vector<double>& crossSections)
+{
+    if (energyLevels.empty() || crossSections.empty()) {
+        throw CanteraError("interpolateCrossSection",
+            "Cross-section data cannot be empty.");
+    }
+
+    if (energy < energyLevels.front() ||
+        energy > energyLevels.back()) {
+        return 0.0;
+    }
+
+    return linearInterp(energy, energyLevels, crossSections);
+}
+
+}
+
 ElectronCollisionPlasmaData::ElectronCollisionPlasmaData()
 {
     energyLevels.assign(1, 0.0);
@@ -120,8 +143,8 @@ void ElectronCollisionPlasmaRate::updateInterpolatedCrossSection(
     m_crossSectionsInterpolated.clear();
     m_crossSectionsInterpolated.reserve(sharedLevels.size());
     for (double level : sharedLevels) {
-        m_crossSectionsInterpolated.emplace_back(linearInterp(level,
-                                            m_energyLevels, m_crossSections));
+        m_crossSectionsInterpolated.emplace_back(
+        interpolateCrossSection(level, m_energyLevels, m_crossSections));
     }
 }
 
@@ -133,8 +156,8 @@ double ElectronCollisionPlasmaRate::evalFromStruct(
     if (m_levelNumber != shared_data.levelNumber) {
         m_crossSectionsInterpolated.clear();
         for (double level : shared_data.energyLevels) {
-            m_crossSectionsInterpolated.push_back(linearInterp(level,
-                                                  m_energyLevels, m_crossSections));
+            m_crossSectionsInterpolated.push_back(
+            interpolateCrossSection(level, m_energyLevels, m_crossSections));
         }
         m_levelNumber = shared_data.levelNumber;
     }
@@ -192,9 +215,10 @@ void ElectronCollisionPlasmaRate::modifyRateConstants(
         for (size_t i = 0; i < shared_data.energyLevels.size(); i++) {
             // The interpolated super-elastic cross section is evaluated
             // at the shared energy grid
-            m_crossSectionsOffset[i] = linearInterp(shared_data.energyLevels[i],
-                                                        superElasticEnergyLevels,
-                                                        m_crossSections);
+            m_crossSectionsOffset[i] = interpolateCrossSection(
+                                        shared_data.energyLevels[i],
+                                        superElasticEnergyLevels,
+                                        m_crossSections);
         }
         m_levelNumberSuperelastic = shared_data.levelNumber;
     }

@@ -61,9 +61,8 @@ TwoTempPlasmaRate::TwoTempPlasmaRate(double A, double b, double Ea, double EE)
 }
 
 TwoTempPlasmaRate::TwoTempPlasmaRate(double A, double b, double Ea, double EE, double bg)
-    : ArrheniusBase(A, b, Ea)
+    : TwoTempPlasmaRate(A, b, Ea, EE)
 {
-    TwoTempPlasmaRate(A, b, Ea, EE);
     m_bg = bg;
 }
 

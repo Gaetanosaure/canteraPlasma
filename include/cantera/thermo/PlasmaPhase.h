@@ -202,8 +202,13 @@ public:
     bool addSpecies(shared_ptr<Species> spec) override;
 
     //! Electron Temperature (K)
-    //!     @return The electron temperature of the phase
-    double electronTemperature() const override {
+    //! @return The electron temperature of the phase
+    double electronTemperature() const override
+    {
+        if (m_distributionType == "Boltzmann-two-term") {
+            const_cast<PlasmaPhase*>(this)->updateElectronEnergyDistribution();
+        }
+
         return m_electronTemp;
     }
 
