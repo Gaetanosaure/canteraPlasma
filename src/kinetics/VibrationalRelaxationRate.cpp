@@ -179,12 +179,16 @@ void registerVibrationalModelConsistency(const Kinetics& kin,
 
     const auto existing = modelByFamily.find(family);
     if (existing != modelByFamily.end() && existing->second != model) {
-        throw InputFileError("VibrationalRelaxationRate::setContext", input,
+        warn_user(
+            "VibrationalRelaxationRate::setContext",
             "Inconsistent vibration_model for vibrational family '{}'. "
             "This family was already registered with model '{}', but the "
             "current reaction uses model '{}'. A given vibrational family "
             "must use exactly one relaxation model.",
-            family, existing->second, model);
+            family,
+            existing->second,
+            model
+        );
     }
 
     modelByFamily[family] = model;
