@@ -297,6 +297,36 @@ private:
     //! collision cross sections [m2] after interpolation
     vector<double> m_crossSectionsInterpolated;
 
+    //! Energy grid used for accurate forward-rate integration.
+    //!
+    //! This grid is the sorted union of:
+    //!   - the current EEDF energy grid;
+    //!   - the native cross-section tabulation energies.
+    //!
+    //! Only the overlap between the EEDF domain and the cross-section
+    //! tabulation domain is retained.
+    vector<double> m_rateIntegrationEnergy;
+
+    //! Cross section evaluated on #m_rateIntegrationEnergy.
+    vector<double> m_rateIntegrationCrossSection;
+
+    //! EEDF grid revision for which the forward integration grid was built.
+    int m_rateIntegrationLevelNumber = -4;
+
+
+    //! Energy grid used for accurate super-elastic rate integration.
+    //!
+    //! For a threshold U, the native excitation cross-section nodes are
+    //! shifted by -U because the super-elastic integral uses sigma(eps + U).
+    vector<double> m_superElasticRateIntegrationEnergy;
+
+    //! Forward excitation cross section sigma(eps + U) evaluated on the
+    //! super-elastic source-energy integration grid.
+    vector<double> m_superElasticRateIntegrationCrossSection;
+
+    //! EEDF grid revision for which the super-elastic integration grid was built.
+    int m_superElasticRateIntegrationLevelNumber = -5;
+
     //! Super-elastic cross sections [m²] interpolated on the shared EEDF grid
     //! after shifting the tabulated energy levels by #m_threshold.
     Eigen::ArrayXd m_crossSectionsOffset;

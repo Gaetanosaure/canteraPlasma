@@ -1254,26 +1254,151 @@ double EEDFTwoTermApproximation::computeElectronMobility(const Eigen::VectorXd& 
     return -1.0 / 3.0 * m_gamma * simpson(f, x) / nDensity;
 }
 
+// double EEDFTwoTermApproximation::forwardRateCoefficientFromEEDF(
+//     const Eigen::VectorXd& f0, size_t k)
+// {
+//     auto rate = m_phase->collisionRate(k);
+//     auto x = rate->energyLevels();
+//     auto y = rate->crossSections();
+
+//     vector<double> integrand(m_points, 0.0);
+
+//     for (size_t i = 0; i < m_points; i++) {
+//         const double eps = m_gridCenter[i];
+//         const double sigma =
+//             linearInterpCrossSectionZeroOutside(eps, x, y);
+//         integrand[i] = eps * sigma * f0(i);
+//     }
+
+//     auto f = ConstMappedVector(integrand.data(), integrand.size());
+//     auto epsGrid = ConstMappedVector(m_gridCenter.data(), m_gridCenter.size());
+
+//     return m_gamma * simpson(f, epsGrid);
+// }
+
 double EEDFTwoTermApproximation::forwardRateCoefficientFromEEDF(
     const Eigen::VectorXd& f0, size_t k)
 {
-    auto rate = m_phase->collisionRate(k);
-    auto x = rate->energyLevels();
-    auto y = rate->crossSections();
-
-    vector<double> integrand(m_points, 0.0);
-
-    for (size_t i = 0; i < m_points; i++) {
-        const double eps = m_gridCenter[i];
-        const double sigma =
-            linearInterpCrossSectionZeroOutside(eps, x, y);
-        integrand[i] = eps * sigma * f0(i);
+    if (k >= m_phase->nCollisions()) {
+        throw CanteraError(
+            "EEDFTwoTermApproximation::forwardRateCoefficientFromEEDF",
+            "Collision index {} is out of range. Number of collisions: {}.",
+            k,
+            m_phase->nCollisions());
     }
 
-    auto f = ConstMappedVector(integrand.data(), integrand.size());
-    auto epsGrid = ConstMappedVector(m_gridCenter.data(), m_gridCenter.size());
+    if (static_cast<size_t>(f0.size()) != m_points) {
+        throw CanteraError(
+            "EEDFTwoTermApproximation::forwardRateCoefficientFromEEDF",
+            "EEDF size mismatch: got {}, expected {}.",
+            f0.size(),
+            m_points);
+    }
 
-    return m_gamma * simpson(f, epsGrid);
+    if (k >= m_eps.size() ||
+        k >= m_sigma.size() ||
+        k >= m_j.size()) {
+        throw CanteraError(
+            "EEDFTwoTermApproximation::forwardRateCoefficientFromEEDF",
+            "Collision integration cache is not initialized for collision {}.",
+            k);
+    }
+
+    if (m_eps[k].size() != m_sigma[k].size() ||
+        m_eps[k].size() != m_j[k].size()) {
+        throw CanteraError(
+            "EEDFTwoTermApproximation::forwardRateCoefficientFromEEDF",
+            "Inconsistent collision integration cache sizes for collision {}: "
+            "eps={}, sigma={}, sourceCells={}.",
+            k,
+            m_eps[k].size(),
+            m_sigma[k].size(),
+            m_j[k].size());
+    }
+
+    // Local logarithmic slopes used by the Boltzmann collision operator:
+    //
+    //     f(eps) ~= f_j * exp[g_j * (eps_j - eps)]
+    //
+    // inside source cell j.
+    const vector<double> g = vector_g(f0);
+
+    double K = 0.0;
+
+    // m_eps[k] already contains a refined partition including:
+    //   - EEDF-grid-related breakpoints,
+    //   - shifted collision breakpoints,
+    //   - native cross-section tabulation energies.
+    //
+    // Therefore narrow structures in sigma(eps) are preserved even when
+    // they fall between two EEDF cell centers.
+    for (size_t n = 0; n < m_eps[k].size(); n++) {
+
+        if (m_eps[k][n].size() != 2 ||
+            m_sigma[k][n].size() != 2) {
+            throw CanteraError(
+                "EEDFTwoTermApproximation::forwardRateCoefficientFromEEDF",
+                "Malformed collision integration segment {} for collision {}.",
+                n,
+                k);
+        }
+
+        const double eps_a = m_eps[k][n][0];
+        const double eps_b = m_eps[k][n][1];
+
+        const double sigma_a = m_sigma[k][n][0];
+        const double sigma_b = m_sigma[k][n][1];
+
+        const size_t j = m_j[k][n];
+
+        if (j >= m_points) {
+            throw CanteraError(
+                "EEDFTwoTermApproximation::forwardRateCoefficientFromEEDF",
+                "Invalid source-cell index {} for collision {} segment {}.",
+                j,
+                k,
+                n);
+        }
+
+        // integralPQ evaluates
+        //
+        //   integral_a^b eps * sigma(eps)
+        //       * exp[g_j * (eps_j - eps)] d eps
+        //
+        // with sigma linearly interpolated between sigma_a and sigma_b.
+        //
+        // Multiplication by f0(j) reconstructs the local EEDF.
+        const double r = integralPQ(
+            eps_a,
+            eps_b,
+            sigma_a,
+            sigma_b,
+            g[j],
+            m_gridCenter[j]);
+
+        const double contribution =
+            m_gamma * r * f0(j);
+
+        if (!std::isfinite(contribution)) {
+            throw CanteraError(
+                "EEDFTwoTermApproximation::forwardRateCoefficientFromEEDF",
+                "Non-finite rate contribution for collision {} segment {}.",
+                k,
+                n);
+        }
+
+        K += contribution;
+    }
+
+    if (!std::isfinite(K) || K < 0.0) {
+        throw CanteraError(
+            "EEDFTwoTermApproximation::forwardRateCoefficientFromEEDF",
+            "Invalid forward rate coefficient for collision '{}': {}.",
+            m_phase->collisionRate(k)->collisionName(),
+            K);
+    }
+
+    return K;
 }
 
 void EEDFTwoTermApproximation::updateSuperElasticWeights(
