@@ -505,6 +505,10 @@ int EEDFTwoTermApproximation::calculateDistributionFunction()
                     updateCrossSections();
                     solveBoltzmannWithSuperElastic(m_f0);
 
+                } else {
+                    // The EEDF tail decay is inside the requested interval:
+                    // the current grid is accepted.
+                    break;
                 }
             }
         }
