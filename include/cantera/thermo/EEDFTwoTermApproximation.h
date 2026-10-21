@@ -11,6 +11,7 @@
 #include "cantera/base/ct_defs.h"
 #include "cantera/numerics/eigen_sparse.h"
 #include "cantera/kinetics/Reaction.h"
+#include <array>
 
 namespace Cantera
 {
@@ -100,7 +101,7 @@ bool f0ComputedAtLastCall() const {
 
     //! Set the type of generated electron energy grid.
     /*!
-     * Supported values are "Linear", "Quadratic", and "Geometric".
+     * Supported values are "Linear", "Quadratic", "Geometric" and "Automatic".
      *
      * @param gridType  Type of grid spacing to use when generating or adapting
      *                  the electron energy grid.
@@ -117,6 +118,58 @@ bool f0ComputedAtLastCall() const {
      *                          nGridCells + 1.
      */
     void setInitialGridParameters(double initialMaxEnergy, size_t nGridCells);
+
+    //! Configure the observable-driven automatic EEDF energy grid.
+    /*!
+    * This mode constructs a custom non-uniform energy grid from a predictor EEDF.
+    * The grid is optimized with respect to electron temperature and all electron
+    * collision rate coefficients registered in PlasmaPhase.
+    *
+    * The automatic mode is selected with:
+    *
+    *     energy_levels_distribution: Automatic
+    *
+    * It is independent of the legacy tail-decay grid adaptation.
+    */
+    void setAutomaticGridParameters(
+        size_t finalCells,
+        size_t bootstrapCells,
+        double bootstrapMaxEnergy,
+        double bootstrapStretchEnergy,
+        size_t bootstrapMaxAttempts,
+        double bootstrapExpansionFactor,
+        size_t predictorCorrectorIterations,
+        bool requireConvergence,
+        double electronTemperatureRtol,
+        double electronTemperatureAtolEv,
+        double collisionRateRtol,
+        double collisionRateFloorM3s,
+        double tailBudgetFraction,
+        double tailExtrapolationDecades,
+        double minimumPredictorDecayDecades,
+        double maxEmaxGrowthFactor,
+        double minEmaxShrinkFactor,
+        double baselineMetricFraction,
+        double thresholdGuardFraction,
+        double maximumPredictorDecayDecades,
+        double minimumObservableTargetMoleFraction);
+
+    //! Permit continuation from the previous physical state only on an explicit opt-in.
+    void setReusePreviousEEDFAsPredictor(bool enabled) {
+        m_reusePreviousEEDFAsPredictor = enabled;
+    }
+
+    //! Independent Maxwellian grid used on the forced-Maxwellian branch.
+    void setForcedMaxwellianGridParameters(const string& type,
+                                           size_t cells, double decayDecades);
+
+    //! Show detailed Automatic bootstrap and predictor-corrector diagnostics.
+    void setAutomaticGridVerbose(bool enabled) {
+        m_automaticVerbose = enabled;
+    }
+
+    //! Experimental constrained-grid monitor: apply the legacy two-pass smoother.
+    void setAutomaticMonitorSmoothing(bool enabled);
 
     //! This funcion enables or disables the grid adaptation based on the EEDF decay at its tail.
     void enableGridAdaptation(bool enabled);
@@ -424,6 +477,155 @@ protected:
     //! @param grid  Vector representing the energy grid corresponding to f
     double norm(const Eigen::VectorXd& f, const Eigen::VectorXd& grid);
 
+    // -----------------------------------------------------------------------------
+    // Observable-driven automatic energy grid
+    // -----------------------------------------------------------------------------
+
+    struct AutomaticGridSnapshot
+    {
+        //! Electron temperature expressed as k_B Te / e [eV].
+        double electronTemperatureEv = NAN;
+
+        //! Forward electron-collision coefficients [m^3/s].
+        //! One entry for every collision registered in PlasmaPhase.
+        vector<double> collisionRates;
+    };
+
+
+    //! Initialize the current EEDF with a Maxwellian at kTe [eV].
+    void setMaxwellianEEDF(double kTe_eV);
+
+
+    //! Build the stretched bootstrap grid used by Automatic mode.
+    vector<double> makeAutomaticBootstrapGrid(
+        double maxEnergy,
+        size_t nCells) const;
+
+
+    //! Energy-weighted logarithmic tail fits at 5..20 percent.
+    //! A stable exponential is required only for tail extrapolation;
+    //! an unstable fit does not, by itself, invalidate a solved EEDF.
+    struct AutomaticTailFit
+    {
+        bool stable = false;
+        double localSlope = NAN; // eV^-1, for short local continuation
+        double conservativeSlope = NAN; // eV^-1, slowest fitted decay
+        double spreadPercent = NAN;
+        size_t validPoints = 0;
+        int extendedStablePercent = 0; // 0 when no stable 3-window group
+        double extendedStableSpanEv = NAN;
+        std::array<double, 10> slopes{{NAN, NAN, NAN, NAN, NAN,
+            NAN, NAN, NAN, NAN, NAN}};
+        std::array<size_t, 10> counts{{0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0}};
+    };
+
+    AutomaticTailFit automaticTailFit() const;
+
+    //! Smallest Emax retaining an already-resolved decay crossing.
+    //! Only resolved positive EEDF values are used; the new Boltzmann
+    //! solve must verify the minimum decay again.
+    double automaticDecayPreservingMaxEnergy(double targetDecayDecades) const;
+
+
+    //! Number of decades between the maximum EEDF value and its right boundary.
+    double automaticPredictorDecayDecades() const;
+
+
+    //! Evaluate the predictor EEDF at an arbitrary energy.
+    //!
+    //! Inside the predictor domain, ln(f) is interpolated linearly.
+    //! Above the predictor domain, the fitted exponential tail is used.
+    double automaticEedfAtEnergy(
+        double energy,
+        double tailSlope) const;
+
+    //! Continuation used only by the grid monitor and EEDF projection.
+    //! If the slope is unstable, average the decreasing exponentials
+    //! from all usable 5..20% windows. Never use it for J_tail.
+    double automaticExtrapolatedEedf(
+        double energy,
+        double lastEnergy,
+        double lastValue,
+        const AutomaticTailFit& fit) const;
+
+    double automaticEedfAtEnergy(
+        double energy,
+        const AutomaticTailFit& fit) const;
+
+
+    //! Diagnostic energy partition used to evaluate monitor functions and tails.
+    //!
+    //! The returned grid contains a stretched background grid plus all native
+    //! cross-section nodes and thresholds located inside [0, maxEnergy].
+    vector<double> automaticDiagnosticGrid(
+        double maxEnergy,
+        size_t scaffoldPoints) const;
+
+
+    //! Electron temperature corresponding to the current center-grid EEDF [eV].
+    //! This reproduces the center -> edge representation used by PlasmaPhase.
+    double automaticElectronTemperatureEv() const;
+
+
+    //! Compute Te and every collision coefficient from the current predictor.
+    //! True when this collision target is present above the observable cutoff.
+    //! This does not change the physical electron-collision operator.
+    bool automaticGridCollisionObservableActive(size_t k) const;
+
+    AutomaticGridSnapshot automaticGridSnapshot();
+
+
+    //! Normalized minimax difference between two predictor/corrector solutions.
+    //!
+    //! Returns:
+    //!
+    //!     max(error_Te, error_K0, ..., error_Kn)
+    //
+    //! worstCollision is npos if Te is the worst observable.
+    double automaticGridConvergenceObjective(
+        const AutomaticGridSnapshot& previous,
+        const AutomaticGridSnapshot& current,
+        size_t& worstCollision,
+        double& electronTemperatureError) const;
+
+
+    //! Optional extrapolation-model diagnostic ONLY; it must never
+    //! affect Emax, remeshing or predictor-corrector acceptance.
+    double automaticTailObjective(
+        double cutoffEnergy,
+        const AutomaticGridSnapshot& snapshot,
+        double tailSlope);
+
+
+    //! Choose the next Emax using measured decay only.
+    //! Stable slopes may predict an extension ONLY when decay < D_min.
+    //! The soft target D_min+1 is used only for shrinking inside the
+    //! already-resolved domain. J_tail is never consulted.
+    double chooseAutomaticMaxEnergy();
+
+
+    //! Construct the final N-cell custom grid by equidistribution of the
+    //! observable-weighted EEDF curvature monitor.
+    vector<double> buildAutomaticGrid(
+        double maxEnergy,
+        const AutomaticGridSnapshot& snapshot,
+        const AutomaticTailFit& tailFit);
+
+
+    //! Project a predictor EEDF onto a newly generated automatic grid.
+    //!
+    //! ln(f) is interpolated in the old domain and the fitted exponential tail
+    //! is used when the new grid extends beyond the old one.
+    void projectPreviousEEDFOnAutomaticGrid(
+        const Eigen::VectorXd& oldGridCenter,
+        const Eigen::VectorXd& oldF0,
+        const AutomaticTailFit& tailFit);
+
+
+    //! Complete Automatic-grid predictor/corrector procedure.
+    void solveWithAutomaticGrid();
+
     //! Electron mobility computed from the most recent valid EEDF [m²/V/s].
     double m_electronMobility;
 
@@ -537,11 +739,17 @@ protected:
     //! First call to calculateDistributionFunction
     bool m_first_call;
 
-    //! The grid type used by the EEDF solver. Supported values are "Linear", "Quadratic", and "Geometric".
+    //! The grid type used by the EEDF solver. Supported values are "Linear", "Quadratic", and "Geometric". Also "Automatic".
     string m_gridType = "Linear";
 
     //! Initial maximum energy of the grid [eV] used when generating EEDF grids. Can be changed by user input of by grid adaptation.
     double m_kTeMax = 60.0;
+
+    //! Immutable initial maximum energy for restoring a legacy grid after Maxwell.
+    double m_initialMaxEnergy = 60.0;
+
+    //! Geometric ratio from YAML, retained across legacy adaptation/remeshing.
+    double m_geometricGridRatio = 1.01;
 
     //! Initial / default number of grid cells. Can be changed by user input.
     size_t m_initialGridCells = 301;
@@ -562,6 +770,92 @@ protected:
 
     //! Maximum number of grid adaptation iterations per EEDF solve.
     size_t m_maxGridAdaptIterations = 100;
+
+    // -----------------------------------------------------------------------------
+    // Parameters of the observable-driven Automatic grid.
+    // -----------------------------------------------------------------------------
+
+    //! Number of cells of the final optimized grid.
+    size_t m_automaticFinalCells = 200;
+
+    bool m_reusePreviousEEDFAsPredictor = false;
+    string m_forcedMaxwellianGridType = "Quadratic";
+    size_t m_forcedMaxwellianGridCells = 200;
+    double m_forcedMaxwellianDecayDecades = 14.0;
+
+    //! True only when a valid cached distribution was computed on the Maxwell branch.
+    bool m_lastEEDFWasForcedMaxwellian = false;
+    //! Set for the duration of a solve whenever the physical branch changes.
+    bool m_regimeChangedThisCall = false;
+
+    void buildForcedMaxwellianGrid(double gasKTeEv);
+
+    //! Number of cells used for the robust first bootstrap.
+    size_t m_automaticBootstrapCells = 120;
+
+    //! Initial bootstrap maximum energy [eV].
+    double m_automaticBootstrapMaxEnergy = 60.0;
+
+    //! Characteristic energy controlling bootstrap-grid stretching [eV].
+    double m_automaticBootstrapStretchEnergy = 0.1;
+
+    //! Maximum number of bootstrap retries after a failed Boltzmann solve.
+    size_t m_automaticBootstrapMaxAttempts = 6;
+
+    //! Emax multiplication factor after a failed bootstrap solve.
+    double m_automaticBootstrapExpansionFactor = 2.0;
+
+    //! Maximum number of predictor / remesh / corrector iterations.
+    size_t m_automaticPredictorCorrectorIterations = 6;
+
+    //! Throw if the requested observable tolerances are not reached.
+    bool m_automaticRequireConvergence = true;
+
+    //! Relative tolerance applied to k_B Te / e.
+    double m_automaticElectronTemperatureRtol = 1.0e-3;
+
+    //! Absolute tolerance applied to k_B Te / e [eV].
+    double m_automaticElectronTemperatureAtolEv = 1.0e-4;
+
+    //! Relative tolerance applied independently to every collision coefficient.
+    double m_automaticCollisionRateRtol = 1.0e-2;
+
+    //! Absolute regularization scale for collision coefficients [m^3/s].
+    double m_automaticCollisionRateFloorM3s = 1.0e-25;
+
+    //! Legacy parameters accepted for YAML backward compatibility.
+    //! Used only if the optional extrapolation-model diagnostic is enabled;
+    //! never used to choose Emax or to accept/reject an automatic grid.
+    double m_automaticTailBudgetFraction = 0.25;
+    double m_automaticTailExtrapolationDecades = 18.0;
+
+    //! Minimum predictor decay required before its tail fit is trusted.
+    double m_automaticMinimumPredictorDecayDecades = 16.0;
+
+    //! Upper bound of the measured EEDF decay for Automatic grids.
+    double m_automaticMaximumPredictorDecayDecades = 20.0;
+
+    //! Raw phase mole fraction needed for a collision to control J_obs/mesh.
+    //! 0.001 = 0.1 mol%; 0.0 restores the full collision catalogue.
+    double m_automaticMinimumObservableTargetMoleFraction = 0.001;
+
+    //! Maximum Emax increase allowed in one predictor/corrector remesh.
+    double m_automaticMaxEmaxGrowthFactor = 4.0;
+
+    //! Minimum Emax / oldEmax ratio allowed in one remesh.
+    double m_automaticMinEmaxShrinkFactor = 0.35;
+
+    //! Uniform background fraction of the grid-monitor density.
+    double m_automaticBaselineMetricFraction = 0.03;
+
+    //! Weak additional monitor density around inelastic thresholds.
+    double m_automaticThresholdGuardFraction = 0.05;
+
+    //! Optional two-pass smoothing of the constrained monitor (default off).
+    bool m_automaticMonitorSmoothing = false;
+
+    //! YAML automatic-grid-parameters: verbose (default false).
+    bool m_automaticVerbose = false;
     
     //! Sets a new grid for the EEDF solver once the maximum energy is updated. This function is only called in the case of grid adaptation.
     void updateGrid(double maxEnergy);

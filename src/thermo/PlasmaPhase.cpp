@@ -581,148 +581,804 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
                     m_eedfSolver->setTargetMoleFractionTolerance(tol["target-mole-fraction-atol"].asDouble());
                 }
             }
+// old code version before automatic grid implementation
+            // if (eedf.hasKey("energy-levels")) {
+            //     // Mode A: user-provided grid edges.
+            //     // In this mode, the grid is considered explicit and fixed by default.
+            //     auto levels = eedf["energy-levels"].asVector<double>();
+
+            //     m_eedfSolver->setCustomGrid(levels);
+            //     m_eedfSolver->enableGridAdaptation(false);
+
+            //     m_nPoints = levels.size();
+
+            // } else {
+            //     // Mode B: generated initial grid.
+            //     if (!eedf.hasKey("initial_max_energy_level")) {
+            //         throw CanteraError("PlasmaPhase::setParameters",
+            //             "Boltzmann-two-term requires either 'energy-levels' or "
+            //             "'initial_max_energy_level'.");
+            //     }
+
+            //     if (!eedf.hasKey("initial_number_of_energy_grid_cells")) {
+            //         throw CanteraError("PlasmaPhase::setParameters",
+            //             "Boltzmann-two-term requires either 'energy-levels' or "
+            //             "'initial_number_of_energy_grid_cells'.");
+            //     }
+
+            //     double initialMaxEnergy = eedf["initial_max_energy_level"].asDouble();
+            //     size_t nGridCells = static_cast<size_t>(
+            //         eedf["initial_number_of_energy_grid_cells"].asInt());
+
+            //     if (!std::isfinite(initialMaxEnergy) || initialMaxEnergy <= 0.0) {
+            //         throw CanteraError("PlasmaPhase::setParameters",
+            //             "initial_max_energy_level must be finite and greater than zero.");
+            //     }
+
+            //     if (nGridCells == 0) {
+            //         throw CanteraError("PlasmaPhase::setParameters",
+            //             "initial_number_of_energy_grid_cells must be greater than zero.");
+            //     }
+
+            //     string energyLevelsDistribution = "Linear";
+            //     if (eedf.hasKey("energy_levels_distribution")) {
+            //         energyLevelsDistribution =
+            //             eedf["energy_levels_distribution"].asString();
+            //     } else {
+            //         writelog("No energy_levels_distribution key found in the input file. "
+            //                 "Defaulting to linear grid.\n");
+            //     }
+
+            //     m_eedfSolver->setGridType(energyLevelsDistribution);
+            //     m_eedfSolver->setInitialGridParameters(initialMaxEnergy, nGridCells);
+            //     // writelog(
+            //     //     "EEDF-SE-DEBUG PHASE_GRID_OPTIONS: initialMaxEnergy={}, nGridCells={}, "
+            //     //     "gridType='{}'\n",
+            //     //     initialMaxEnergy,
+            //     //     nGridCells,
+            //     //     energyLevelsDistribution
+            //     // );
+
+            //     if (energyLevelsDistribution == "Linear") {
+            //         m_eedfSolver->setLinearGrid(initialMaxEnergy, nGridCells);
+            //     } else if (energyLevelsDistribution == "Quadratic") {
+            //         m_eedfSolver->setQuadraticGrid(initialMaxEnergy, nGridCells);
+            //     } else if (energyLevelsDistribution == "Geometric") {
+            //         if (eedf.hasKey("geometric_grid_ratio")) {
+            //             double ratio = eedf["geometric_grid_ratio"].asDouble();
+            //             if (!std::isfinite(ratio) || ratio <= 1.0) {
+            //                 throw CanteraError("PlasmaPhase::setParameters",
+            //                     "geometric_grid_ratio must be finite and greater than 1.0.");
+            //             }
+            //             m_eedfSolver->setGeometricGrid(initialMaxEnergy, nGridCells, ratio);
+            //         } else {
+            //              writelog("No geometric_grid_ratio key found for geometric grid in the input file. "
+            //                      "Defaulting to a geometric ratio of 1.01.\n");
+            //         m_eedfSolver->setGeometricGrid(initialMaxEnergy, nGridCells);
+            //     }
+            //     } else {
+            //         throw CanteraError("PlasmaPhase::setParameters",
+            //             "energy_levels_distribution should be Linear, Quadratic or Geometric.");
+            //     }
+
+            //     if (eedf.hasKey("reduced_field_threshold_before_maxwellian_Td")){
+            //         double maxwellian_threshold = eedf["reduced_field_threshold_before_maxwellian_Td"].asDouble();
+            //         if (!std::isfinite(maxwellian_threshold) || maxwellian_threshold < 0.0) {
+            //             throw CanteraError("PlasmaPhase::setParameters",
+            //                 "reduced_field_threshold_before_maxwellian_Td must be finite and non-negative.");
+            //         }
+            //         m_eedfSolver->setReducedFieldThresholdBeforeMaxwellianTd(maxwellian_threshold); // The input to this function is expected to be in Townsend.
+            //     }
+
+            //     if (eedf.hasKey("energy_grid_adaptation")) {
+            //         const AnyMap adapt = eedf["energy_grid_adaptation"].as<AnyMap>();
+
+            //         bool enabled = true;
+            //         if (adapt.hasKey("enabled")) {
+            //             enabled = adapt["enabled"].asBool();
+            //         }
+
+            //         bool maxwellian_reset = true;
+            //         if (adapt.hasKey("maxwellian-reset")) {
+            //             maxwellian_reset = adapt["maxwellian-reset"].asBool();
+            //         }
+
+            //         double minDecayDecades = 8.0;
+            //         if (adapt.hasKey("min_decay_decades")) {
+            //             minDecayDecades = adapt["min_decay_decades"].asDouble();
+            //         }
+
+            //         double maxDecayDecades = 14.0;
+            //         if (adapt.hasKey("max_decay_decades")) {
+            //             maxDecayDecades = adapt["max_decay_decades"].asDouble();
+            //         }
+
+            //         double updateFactor = 0.25;
+            //         if (adapt.hasKey("update_factor")) {
+            //             updateFactor = adapt["update_factor"].asDouble();
+            //         }
+
+            //         size_t maxIterations = 5;
+            //         if (adapt.hasKey("max_iterations")) {
+            //             maxIterations = static_cast<size_t>(
+            //                 adapt["max_iterations"].asInt());
+            //         }
+
+            //         m_eedfSolver->setGridAdaptationParameters(
+            //             enabled, minDecayDecades, maxDecayDecades,
+            //             updateFactor, maxIterations, maxwellian_reset);
+            //         // writelog(
+            //         //     "EEDF-SE-DEBUG PHASE_GRID_ADAPT: enabled={}, minDecayDecades={}, "
+            //         //     "maxDecayDecades={}, updateFactor={}, maxIterations={}, maxwellianReset={}\n",
+            //         //     enabled,
+            //         //     minDecayDecades,
+            //         //     maxDecayDecades,
+            //         //     updateFactor,
+            //         //     maxIterations,
+            //         //     maxwellian_reset
+            //         // );
+            //     } else {
+            //         m_eedfSolver->enableGridAdaptation(false);
+            //     }
+
+            //     // In PlasmaPhase, m_nPoints is the number of grid edges.
+            //     m_nPoints = nGridCells + 1;
+            // }
 
             if (eedf.hasKey("energy-levels")) {
-                // Mode A: user-provided grid edges.
-                // In this mode, the grid is considered explicit and fixed by default.
-                auto levels = eedf["energy-levels"].asVector<double>();
 
-                m_eedfSolver->setCustomGrid(levels);
-                m_eedfSolver->enableGridAdaptation(false);
+                // Explicit user-provided custom grid.
+                if (eedf.hasKey("energy_levels_distribution") &&
+                    eedf["energy_levels_distribution"].asString()
+                        == "Automatic") {
 
-                m_nPoints = levels.size();
+                    throw CanteraError(
+                        "PlasmaPhase::setParameters",
+                        "'energy-levels' and "
+                        "'energy_levels_distribution: Automatic' are mutually exclusive.");
+                }
+
+                auto levels =
+                    eedf["energy-levels"]
+                    .asVector<double>();
+
+                m_eedfSolver->setCustomGrid(
+                    levels);
+
+                m_eedfSolver->enableGridAdaptation(
+                    false);
+
+                m_nPoints =
+                    levels.size();
 
             } else {
-                // Mode B: generated initial grid.
-                if (!eedf.hasKey("initial_max_energy_level")) {
-                    throw CanteraError("PlasmaPhase::setParameters",
-                        "Boltzmann-two-term requires either 'energy-levels' or "
-                        "'initial_max_energy_level'.");
-                }
 
-                if (!eedf.hasKey("initial_number_of_energy_grid_cells")) {
-                    throw CanteraError("PlasmaPhase::setParameters",
-                        "Boltzmann-two-term requires either 'energy-levels' or "
-                        "'initial_number_of_energy_grid_cells'.");
-                }
+                string energyLevelsDistribution =
+                    "Linear";
 
-                double initialMaxEnergy = eedf["initial_max_energy_level"].asDouble();
-                size_t nGridCells = static_cast<size_t>(
-                    eedf["initial_number_of_energy_grid_cells"].asInt());
+                if (eedf.hasKey(
+                        "energy_levels_distribution")) {
 
-                if (!std::isfinite(initialMaxEnergy) || initialMaxEnergy <= 0.0) {
-                    throw CanteraError("PlasmaPhase::setParameters",
-                        "initial_max_energy_level must be finite and greater than zero.");
-                }
-
-                if (nGridCells == 0) {
-                    throw CanteraError("PlasmaPhase::setParameters",
-                        "initial_number_of_energy_grid_cells must be greater than zero.");
-                }
-
-                string energyLevelsDistribution = "Linear";
-                if (eedf.hasKey("energy_levels_distribution")) {
                     energyLevelsDistribution =
-                        eedf["energy_levels_distribution"].asString();
+                        eedf[
+                            "energy_levels_distribution"]
+                        .asString();
+
                 } else {
-                    writelog("No energy_levels_distribution key found in the input file. "
-                            "Defaulting to linear grid.\n");
+
+                    writelog(
+                        "No energy_levels_distribution key found in the input file. "
+                        "Defaulting to linear grid.\n");
                 }
 
-                m_eedfSolver->setGridType(energyLevelsDistribution);
-                m_eedfSolver->setInitialGridParameters(initialMaxEnergy, nGridCells);
-                // writelog(
-                //     "EEDF-SE-DEBUG PHASE_GRID_OPTIONS: initialMaxEnergy={}, nGridCells={}, "
-                //     "gridType='{}'\n",
-                //     initialMaxEnergy,
-                //     nGridCells,
-                //     energyLevelsDistribution
-                // );
+                m_eedfSolver->setGridType(
+                    energyLevelsDistribution);
 
-                if (energyLevelsDistribution == "Linear") {
-                    m_eedfSolver->setLinearGrid(initialMaxEnergy, nGridCells);
-                } else if (energyLevelsDistribution == "Quadratic") {
-                    m_eedfSolver->setQuadraticGrid(initialMaxEnergy, nGridCells);
-                } else if (energyLevelsDistribution == "Geometric") {
-                    if (eedf.hasKey("geometric_grid_ratio")) {
-                        double ratio = eedf["geometric_grid_ratio"].asDouble();
-                        if (!std::isfinite(ratio) || ratio <= 1.0) {
-                            throw CanteraError("PlasmaPhase::setParameters",
-                                "geometric_grid_ratio must be finite and greater than 1.0.");
+                // ==================================================================
+                // Automatic observable-driven grid
+                // ==================================================================
+                if (energyLevelsDistribution
+                    == "Automatic") {
+
+                    if (!eedf.hasKey(
+                            "automatic-grid-parameters")) {
+
+                        throw CanteraError(
+                            "PlasmaPhase::setParameters",
+                            "energy_levels_distribution: Automatic requires "
+                            "'automatic-grid-parameters'.");
+                    }
+
+                    const AnyMap automatic =
+                        eedf[
+                            "automatic-grid-parameters"]
+                        .as<AnyMap>();
+
+                    size_t finalCells = 200;
+
+                    if (automatic.hasKey(
+                            "final-number-of-cells")) {
+
+                        finalCells =
+                            static_cast<size_t>(
+                                automatic[
+                                    "final-number-of-cells"]
+                                .asInt());
+                    }
+
+                    size_t bootstrapCells =
+                        std::min<size_t>(
+                            120,
+                            finalCells);
+
+                    if (automatic.hasKey(
+                            "bootstrap-number-of-cells")) {
+
+                        bootstrapCells =
+                            static_cast<size_t>(
+                                automatic[
+                                    "bootstrap-number-of-cells"]
+                                .asInt());
+                    }
+
+                    double bootstrapMaxEnergy =
+                        60.0;
+
+                    if (automatic.hasKey(
+                            "bootstrap-max-energy-level")) {
+
+                        bootstrapMaxEnergy =
+                            automatic[
+                                "bootstrap-max-energy-level"]
+                            .asDouble();
+                    }
+
+                    double bootstrapStretchEnergy =
+                        0.1;
+
+                    if (automatic.hasKey(
+                            "bootstrap-stretch-energy")) {
+
+                        bootstrapStretchEnergy =
+                            automatic[
+                                "bootstrap-stretch-energy"]
+                            .asDouble();
+                    }
+
+                    size_t bootstrapMaxAttempts =
+                        6;
+
+                    if (automatic.hasKey(
+                            "bootstrap-max-attempts")) {
+
+                        bootstrapMaxAttempts =
+                            static_cast<size_t>(
+                                automatic[
+                                    "bootstrap-max-attempts"]
+                                .asInt());
+                    }
+
+                    double bootstrapExpansionFactor =
+                        2.0;
+
+                    if (automatic.hasKey(
+                            "bootstrap-expansion-factor")) {
+
+                        bootstrapExpansionFactor =
+                            automatic[
+                                "bootstrap-expansion-factor"]
+                            .asDouble();
+                    }
+
+                    size_t predictorCorrectorIterations =
+                        3;
+
+                    if (automatic.hasKey(
+                            "predictor-corrector-iterations")) {
+
+                        predictorCorrectorIterations =
+                            static_cast<size_t>(
+                                automatic[
+                                    "predictor-corrector-iterations"]
+                                .asInt());
+                    }
+
+                    bool requireConvergence =
+                        true;
+
+                    if (automatic.hasKey(
+                            "require-convergence")) {
+
+                        requireConvergence =
+                            automatic[
+                                "require-convergence"]
+                            .asBool();
+                    }
+
+                    double electronTemperatureRtol =
+                        1.0e-3;
+
+                    if (automatic.hasKey(
+                            "electron-temperature-rtol")) {
+
+                        electronTemperatureRtol =
+                            automatic[
+                                "electron-temperature-rtol"]
+                            .asDouble();
+                    }
+
+                    double electronTemperatureAtolEv =
+                        1.0e-4;
+
+                    if (automatic.hasKey(
+                            "electron-temperature-atol-eV")) {
+
+                        electronTemperatureAtolEv =
+                            automatic[
+                                "electron-temperature-atol-eV"]
+                            .asDouble();
+                    }
+
+                    double collisionRateRtol =
+                        1.0e-2;
+
+                    if (automatic.hasKey(
+                            "collision-rate-rtol")) {
+
+                        collisionRateRtol =
+                            automatic[
+                                "collision-rate-rtol"]
+                            .asDouble();
+                    }
+
+                    double collisionRateFloorM3s =
+                        1.0e-25;
+
+                    if (automatic.hasKey(
+                            "collision-rate-floor-m3-s")) {
+
+                        collisionRateFloorM3s =
+                            automatic[
+                                "collision-rate-floor-m3-s"]
+                            .asDouble();
+                    }
+
+                    double tailBudgetFraction =
+                        0.25;
+
+                    if (automatic.hasKey(
+                            "tail-budget-fraction")) {
+
+                        tailBudgetFraction =
+                            automatic[
+                                "tail-budget-fraction"]
+                            .asDouble();
+                    }
+
+                    double tailExtrapolationDecades =
+                        18.0;
+
+                    if (automatic.hasKey(
+                            "tail-extrapolation-decades")) {
+
+                        tailExtrapolationDecades =
+                            automatic[
+                                "tail-extrapolation-decades"]
+                            .asDouble();
+                    }
+
+                    double minimumPredictorDecayDecades =
+                        16.0;
+
+                    if (automatic.hasKey(
+                            "minimum-predictor-decay-decades")) {
+
+                        minimumPredictorDecayDecades =
+                            automatic[
+                                "minimum-predictor-decay-decades"]
+                            .asDouble();
+                    }
+
+                    // Absolute upper bound, expressed in decades. The
+                    // default preserves the former D_min + 4 behavior.
+                    double maximumPredictorDecayDecades =
+                        minimumPredictorDecayDecades + 4.0;
+
+                    if (automatic.hasKey(
+                            "maximum-predictor-decay-decades")) {
+                        maximumPredictorDecayDecades =
+                            automatic[
+                                "maximum-predictor-decay-decades"]
+                            .asDouble();
+                    }
+
+                    // Raw mole fraction (0.001 means 0.1 mol%). Collisions
+                    // below this value remain physical, but cannot drive
+                    // the Automatic observable monitor or J_obs.
+                    double minimumObservableTargetMoleFraction = 0.001;
+
+                    if (automatic.hasKey(
+                            "minimum-observable-target-mole-fraction")) {
+                        minimumObservableTargetMoleFraction =
+                            automatic[
+                                "minimum-observable-target-mole-fraction"]
+                            .asDouble();
+                    }
+
+                    double maxEmaxGrowthFactor =
+                        4.0;
+
+                    if (automatic.hasKey(
+                            "max-emax-growth-factor")) {
+
+                        maxEmaxGrowthFactor =
+                            automatic[
+                                "max-emax-growth-factor"]
+                            .asDouble();
+                    }
+
+                    double minEmaxShrinkFactor =
+                        0.35;
+
+                    if (automatic.hasKey(
+                            "min-emax-shrink-factor")) {
+
+                        minEmaxShrinkFactor =
+                            automatic[
+                                "min-emax-shrink-factor"]
+                            .asDouble();
+                    }
+
+                    double baselineMetricFraction =
+                        0.03;
+
+                    if (automatic.hasKey(
+                            "baseline-metric-fraction")) {
+
+                        baselineMetricFraction =
+                            automatic[
+                                "baseline-metric-fraction"]
+                            .asDouble();
+                    }
+
+                    double thresholdGuardFraction =
+                        0.05;
+
+                    if (automatic.hasKey(
+                            "threshold-guard-fraction")) {
+
+                        thresholdGuardFraction =
+                            automatic[
+                                "threshold-guard-fraction"]
+                            .asDouble();
+                    }
+
+                    // Explicitly reject simultaneous use of the legacy adaptation.
+                    if (eedf.hasKey(
+                            "energy_grid_adaptation")) {
+
+                        const AnyMap adapt =
+                            eedf[
+                                "energy_grid_adaptation"]
+                            .as<AnyMap>();
+
+                        bool enabled = true;
+
+                        if (adapt.hasKey("enabled")) {
+                            enabled =
+                                adapt["enabled"]
+                                .asBool();
                         }
-                        m_eedfSolver->setGeometricGrid(initialMaxEnergy, nGridCells, ratio);
+
+                        if (enabled) {
+                            throw CanteraError(
+                                "PlasmaPhase::setParameters",
+                                "energy_grid_adaptation and "
+                                "energy_levels_distribution: Automatic "
+                                "cannot be enabled simultaneously.");
+                        }
+                    }
+
+                    bool reusePrevious = false;
+                    if (automatic.hasKey("reuse-previous-eedf-as-predictor")) {
+                        reusePrevious = automatic[
+                            "reuse-previous-eedf-as-predictor"].asBool();
+                    }
+                    m_eedfSolver->setReusePreviousEEDFAsPredictor(reusePrevious);
+
+                    m_eedfSolver->setAutomaticGridParameters(
+                        finalCells,
+                        bootstrapCells,
+                        bootstrapMaxEnergy,
+                        bootstrapStretchEnergy,
+                        bootstrapMaxAttempts,
+                        bootstrapExpansionFactor,
+                        predictorCorrectorIterations,
+                        requireConvergence,
+                        electronTemperatureRtol,
+                        electronTemperatureAtolEv,
+                        collisionRateRtol,
+                        collisionRateFloorM3s,
+                        tailBudgetFraction,
+                        tailExtrapolationDecades,
+                        minimumPredictorDecayDecades,
+                        maxEmaxGrowthFactor,
+                        minEmaxShrinkFactor,
+                        baselineMetricFraction,
+                        thresholdGuardFraction,
+                        maximumPredictorDecayDecades,
+                        minimumObservableTargetMoleFraction);
+
+                    m_nPoints =
+                        m_eedfSolver
+                        ->getGridEdge()
+                        .size();
+                    
+                    bool smoothMonitor = false;
+
+                    if (automatic.hasKey("smooth-monitor")) {
+                        smoothMonitor =
+                            automatic["smooth-monitor"].asBool();
+                    }
+
+                    m_eedfSolver->setAutomaticMonitorSmoothing(smoothMonitor);
+
+                    // Detailed Automatic-grid logs are opt-in (default silent).
+                    bool verbose = false;
+                    if (automatic.hasKey("verbose")) {
+                        verbose = automatic["verbose"].asBool();
+                    }
+                    m_eedfSolver->setAutomaticGridVerbose(verbose);
+
+                // ==================================================================
+                // Existing generated grids
+                // ==================================================================
+                } else {
+
+                    if (!eedf.hasKey(
+                            "initial_max_energy_level")) {
+
+                        throw CanteraError(
+                            "PlasmaPhase::setParameters",
+                            "Linear, Quadratic and Geometric EEDF grids require "
+                            "'initial_max_energy_level'.");
+                    }
+
+                    if (!eedf.hasKey(
+                            "initial_number_of_energy_grid_cells")) {
+
+                        throw CanteraError(
+                            "PlasmaPhase::setParameters",
+                            "Linear, Quadratic and Geometric EEDF grids require "
+                            "'initial_number_of_energy_grid_cells'.");
+                    }
+
+                    double initialMaxEnergy =
+                        eedf[
+                            "initial_max_energy_level"]
+                        .asDouble();
+
+                    size_t nGridCells =
+                        static_cast<size_t>(
+                            eedf[
+                                "initial_number_of_energy_grid_cells"]
+                            .asInt());
+
+                    if (!std::isfinite(
+                            initialMaxEnergy) ||
+                        initialMaxEnergy <= 0.0) {
+
+                        throw CanteraError(
+                            "PlasmaPhase::setParameters",
+                            "initial_max_energy_level must be finite and positive.");
+                    }
+
+                    if (nGridCells == 0) {
+
+                        throw CanteraError(
+                            "PlasmaPhase::setParameters",
+                            "initial_number_of_energy_grid_cells must be positive.");
+                    }
+
+                    m_eedfSolver
+                        ->setInitialGridParameters(
+                            initialMaxEnergy,
+                            nGridCells);
+
+                    if (energyLevelsDistribution
+                        == "Linear") {
+
+                        m_eedfSolver->setLinearGrid(
+                            initialMaxEnergy,
+                            nGridCells);
+
+                    } else if (
+                        energyLevelsDistribution
+                        == "Quadratic") {
+
+                        m_eedfSolver->setQuadraticGrid(
+                            initialMaxEnergy,
+                            nGridCells);
+
+                    } else if (
+                        energyLevelsDistribution
+                        == "Geometric") {
+
+                        if (eedf.hasKey(
+                                "geometric_grid_ratio")) {
+
+                            const double ratio =
+                                eedf[
+                                    "geometric_grid_ratio"]
+                                .asDouble();
+
+                            if (!std::isfinite(ratio) ||
+                                ratio <= 1.0) {
+
+                                throw CanteraError(
+                                    "PlasmaPhase::setParameters",
+                                    "geometric_grid_ratio must be finite "
+                                    "and greater than 1.");
+                            }
+
+                            m_eedfSolver
+                                ->setGeometricGrid(
+                                    initialMaxEnergy,
+                                    nGridCells,
+                                    ratio);
+
+                        } else {
+
+                            writelog(
+                                "No geometric_grid_ratio found. "
+                                "Defaulting to 1.01.\n");
+
+                            m_eedfSolver
+                                ->setGeometricGrid(
+                                    initialMaxEnergy,
+                                    nGridCells);
+                        }
+
                     } else {
-                         writelog("No geometric_grid_ratio key found for geometric grid in the input file. "
-                                 "Defaulting to a geometric ratio of 1.01.\n");
-                    m_eedfSolver->setGeometricGrid(initialMaxEnergy, nGridCells);
+
+                        throw CanteraError(
+                            "PlasmaPhase::setParameters",
+                            "energy_levels_distribution must be "
+                            "Linear, Quadratic, Geometric or Automatic.");
+                    }
+
+                    // Existing legacy adaptation.
+                    if (eedf.hasKey(
+                            "energy_grid_adaptation")) {
+
+                        const AnyMap adapt =
+                            eedf[
+                                "energy_grid_adaptation"]
+                            .as<AnyMap>();
+
+                        bool enabled = true;
+
+                        if (adapt.hasKey("enabled")) {
+                            enabled =
+                                adapt["enabled"]
+                                .asBool();
+                        }
+
+                        bool maxwellianReset = true;
+
+                        if (adapt.hasKey(
+                                "maxwellian-reset")) {
+                            maxwellianReset =
+                                adapt[
+                                    "maxwellian-reset"]
+                                .asBool();
+                        }
+
+                        double minDecayDecades = 8.0;
+
+                        if (adapt.hasKey(
+                                "min_decay_decades")) {
+                            minDecayDecades =
+                                adapt[
+                                    "min_decay_decades"]
+                                .asDouble();
+                        }
+
+                        double maxDecayDecades = 14.0;
+
+                        if (adapt.hasKey(
+                                "max_decay_decades")) {
+                            maxDecayDecades =
+                                adapt[
+                                    "max_decay_decades"]
+                                .asDouble();
+                        }
+
+                        double updateFactor = 0.25;
+
+                        if (adapt.hasKey(
+                                "update_factor")) {
+                            updateFactor =
+                                adapt[
+                                    "update_factor"]
+                                .asDouble();
+                        }
+
+                        size_t maxIterations = 5;
+
+                        if (adapt.hasKey(
+                                "max_iterations")) {
+                            maxIterations =
+                                static_cast<size_t>(
+                                    adapt[
+                                        "max_iterations"]
+                                    .asInt());
+                        }
+
+                        m_eedfSolver
+                            ->setGridAdaptationParameters(
+                                enabled,
+                                minDecayDecades,
+                                maxDecayDecades,
+                                updateFactor,
+                                maxIterations,
+                                maxwellianReset);
+
+                    } else {
+
+                        m_eedfSolver
+                            ->enableGridAdaptation(
+                                false);
+                    }
+
+                    m_nPoints =
+                        nGridCells + 1;
                 }
-                } else {
-                    throw CanteraError("PlasmaPhase::setParameters",
-                        "energy_levels_distribution should be Linear, Quadratic or Geometric.");
+
+                // The forced-Maxwellian branch uses its own energy grid.
+                if (eedf.hasKey("maxwellian-grid")) {
+                    const AnyMap mg = eedf["maxwellian-grid"].as<AnyMap>();
+                    string type = "Quadratic";
+                    size_t cells = 200;
+                    double decades = 14.0;
+                    if (mg.hasKey("type")) { type = mg["type"].asString(); }
+                    if (mg.hasKey("number-of-cells")) {
+                        const int count = mg["number-of-cells"].asInt();
+                        if (count < 3) {
+                            throw CanteraError("PlasmaPhase::setParameters",
+                                "maxwellian-grid number-of-cells must be >= 3.");
+                        }
+                        cells = static_cast<size_t>(count);
+                    }
+                    if (mg.hasKey("decay-decades")) {
+                        decades = mg["decay-decades"].asDouble();
+                    }
+                    m_eedfSolver->setForcedMaxwellianGridParameters(
+                        type, cells, decades);
                 }
 
-                if (eedf.hasKey("reduced_field_threshold_before_maxwellian_Td")){
-                    double maxwellian_threshold = eedf["reduced_field_threshold_before_maxwellian_Td"].asDouble();
-                    if (!std::isfinite(maxwellian_threshold) || maxwellian_threshold < 0.0) {
-                        throw CanteraError("PlasmaPhase::setParameters",
-                            "reduced_field_threshold_before_maxwellian_Td must be finite and non-negative.");
+                // This option applies to all generated grids, including Automatic.
+                if (eedf.hasKey(
+                        "reduced_field_threshold_before_maxwellian_Td")) {
+
+                    const double threshold =
+                        eedf[
+                            "reduced_field_threshold_before_maxwellian_Td"]
+                        .asDouble();
+
+                    if (!std::isfinite(threshold) ||
+                        threshold < 0.0) {
+
+                        throw CanteraError(
+                            "PlasmaPhase::setParameters",
+                            "reduced_field_threshold_before_maxwellian_Td "
+                            "must be finite and non-negative.");
                     }
-                    m_eedfSolver->setReducedFieldThresholdBeforeMaxwellianTd(maxwellian_threshold); // The input to this function is expected to be in Townsend.
+
+                    m_eedfSolver
+                        ->setReducedFieldThresholdBeforeMaxwellianTd(
+                            threshold);
                 }
-
-                if (eedf.hasKey("energy_grid_adaptation")) {
-                    const AnyMap adapt = eedf["energy_grid_adaptation"].as<AnyMap>();
-
-                    bool enabled = true;
-                    if (adapt.hasKey("enabled")) {
-                        enabled = adapt["enabled"].asBool();
-                    }
-
-                    bool maxwellian_reset = true;
-                    if (adapt.hasKey("maxwellian-reset")) {
-                        maxwellian_reset = adapt["maxwellian-reset"].asBool();
-                    }
-
-                    double minDecayDecades = 8.0;
-                    if (adapt.hasKey("min_decay_decades")) {
-                        minDecayDecades = adapt["min_decay_decades"].asDouble();
-                    }
-
-                    double maxDecayDecades = 14.0;
-                    if (adapt.hasKey("max_decay_decades")) {
-                        maxDecayDecades = adapt["max_decay_decades"].asDouble();
-                    }
-
-                    double updateFactor = 0.25;
-                    if (adapt.hasKey("update_factor")) {
-                        updateFactor = adapt["update_factor"].asDouble();
-                    }
-
-                    size_t maxIterations = 5;
-                    if (adapt.hasKey("max_iterations")) {
-                        maxIterations = static_cast<size_t>(
-                            adapt["max_iterations"].asInt());
-                    }
-
-                    m_eedfSolver->setGridAdaptationParameters(
-                        enabled, minDecayDecades, maxDecayDecades,
-                        updateFactor, maxIterations, maxwellian_reset);
-                    // writelog(
-                    //     "EEDF-SE-DEBUG PHASE_GRID_ADAPT: enabled={}, minDecayDecades={}, "
-                    //     "maxDecayDecades={}, updateFactor={}, maxIterations={}, maxwellianReset={}\n",
-                    //     enabled,
-                    //     minDecayDecades,
-                    //     maxDecayDecades,
-                    //     updateFactor,
-                    //     maxIterations,
-                    //     maxwellian_reset
-                    // );
-                } else {
-                    m_eedfSolver->enableGridAdaptation(false);
-                }
-
-                // In PlasmaPhase, m_nPoints is the number of grid edges.
-                m_nPoints = nGridCells + 1;
             }
 
             m_electronEnergyLevels = Eigen::Map<const Eigen::ArrayXd>(
