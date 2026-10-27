@@ -708,6 +708,10 @@ private:
     //! The array containing the references of each electron collision.
     set<string> m_referencedElectronCollisions;
 
+    //! Ignore standalone EEDF collisions with a target absent from this phase.
+    //! Strict (historical) loading is preserved by default.
+    bool m_ignoreMissingStandaloneCollisionTargets = false;
+
     //! Target electron number density [1/m^3]; negative disables the constraint.
     double m_electronNumberDensityTarget = -1.0;
 

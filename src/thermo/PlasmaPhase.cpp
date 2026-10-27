@@ -476,6 +476,9 @@ void PlasmaPhase::getParameters(AnyMap& phaseNode) const
             m_eedfSolver->electronElectronCollisionsEnabled();
         eedf["super-elastic-collisions"] =
             m_eedfSolver->superElasticCollisionsEnabled();
+        if (m_ignoreMissingStandaloneCollisionTargets) {
+            eedf["ignore-missing-standalone-collision-targets"] = true;
+        }
     }
 
     phaseNode["electron-energy-distribution"] = std::move(eedf);
@@ -487,6 +490,11 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
     if (phaseNode.hasKey("electron-energy-distribution")) {
         const AnyMap eedf = phaseNode["electron-energy-distribution"].as<AnyMap>();
         m_distributionType = eedf["type"].asString();
+        // Opt-in: the full electron-collision database may contain targets
+        // that are intentionally not part of this phase.
+        m_ignoreMissingStandaloneCollisionTargets =
+            eedf.hasKey("ignore-missing-standalone-collision-targets")
+            && eedf["ignore-missing-standalone-collision-targets"].asBool();
         if (m_distributionType == "isotropic") {
             if (eedf.hasKey("shape-factor")) {
                 setIsotropicShapeFactor(eedf["shape-factor"].asDouble());
@@ -1434,6 +1442,8 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
     }
 
     if (rootNode.hasKey("electron-collisions")) {
+        size_t skippedStandalone = 0;
+        set<string> skippedTargets;
         for (const auto& item : rootNode["electron-collisions"].asVector<AnyMap>()) {
             if (item.hasKey("name")) {
                 string name = item["name"].asString();
@@ -1454,9 +1464,32 @@ void PlasmaPhase::setParameters(const AnyMap& phaseNode, const AnyMap& rootNode)
                 }
             }
 
+            // Only standalone collisions can be filtered. A collision referenced
+            // by an explicit reaction is never silently ignored.
+            if (m_ignoreMissingStandaloneCollisionTargets) {
+                const string target = item["target"].asString();
+                if (speciesIndex(target, false) == npos) {
+                    ++skippedStandalone;
+                    skippedTargets.insert(target);
+                    continue;
+                }
+            }
+
             // Old YAML format for anonymous collisions or unreferenced named collisions: they remain as standalone EEDF collisions.
             addStandaloneElectronCollision(item);
             
+        }
+        if (skippedStandalone != 0) {
+            string targetNames;
+            for (const auto& target : skippedTargets) {
+                if (!targetNames.empty()) {
+                    targetNames += ", ";
+                }
+                targetNames += target;
+            }
+            writelog("PlasmaPhase: ignored {} standalone electron collisions "
+                     "with targets absent from this phase: {}\n",
+                     skippedStandalone, targetNames);
         }
     }
 }
